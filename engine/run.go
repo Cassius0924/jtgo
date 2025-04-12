@@ -3,9 +3,9 @@ package engine
 import (
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/bytedance/sonic"
+	// "github.com/cassius0924/jtgo/ds"
 	"github.com/cassius0924/jtgo/util"
 	"github.com/cassius0924/jtgo/werror"
 	"github.com/tidwall/gjson"
@@ -75,11 +75,10 @@ func (e *JTEngine) recursiveParse(templateNode gjson.Result, target map[string]a
 			return true
 		}
 
-		// 去掉头尾空格
-		fieldName := strings.TrimSpace(field.String())
+		fieldName := normalizeFieldName(field.String())
 
 		// fieldName 有五种情况：1. DEFAULT 2. VAR 3. DO 4. 普通字符串 5. 表达式
-		switch DetectKeyword(fieldName) {
+		switch detectKeyword(fieldName) {
 		case KeywordDo:
 			// 是 DO 关键词，需要执行操作
 			e.doOperations(&node)
@@ -102,7 +101,7 @@ func (e *JTEngine) recursiveParse(templateNode gjson.Result, target map[string]a
 			switch {
 			case node.IsObject():
 				// 是Object，需要继续递归解析
-				target[fieldName] = map[string]any{}
+				target[fieldName] = make(map[string]any)
 				subTarget := target[fieldName].(map[string]any)
 				// 递归解析
 				result, hasResult := e.recursiveParse(node, subTarget, fieldName)
@@ -111,7 +110,7 @@ func (e *JTEngine) recursiveParse(templateNode gjson.Result, target map[string]a
 				}
 				return true
 			default:
-				// 其他类型直接复制
+				// 其他类型直接赋值
 				target[fieldName] = e.replaceExpression(&node)
 				slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.recursiveParse](trace) using default value,\nkey = %s,\nvalue = %s", fieldName, node.String()))
 				return true
@@ -127,7 +126,6 @@ func (e *JTEngine) recursiveParse(templateNode gjson.Result, target map[string]a
 		if isBoolResult { // 表达式为true，替换值，并剪枝结束循环
 			res = &node
 			isMatch = true
-			matchedExpr = fmt.Sprintf(expressionFormat, expression)
 			return false
 		}
 		return true
@@ -135,11 +133,9 @@ func (e *JTEngine) recursiveParse(templateNode gjson.Result, target map[string]a
 
 	// 遍历完毕，解析匹配到的值
 	if isMatch {
-		e.matchedExprTraces[keyName] = matchedExpr
 		slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.recursiveParse](trace) using matched value,\nkey = %s,\nvalue = %s,\nexpr = %s", keyName, res.String(), matchedExpr))
 		return e.replaceExpression(res), true
 	} else if defaultRes != nil { // 没有匹配到值，使用DEFAULT默认值兜底
-		e.matchedExprTraces[keyName] = `${DEFAULT}`
 		slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.recursiveParse](trace) using default value,\nkey = %s,\nvalue = %s,\nexpr = ${DEFAULT},", keyName, defaultRes.String()))
 		return e.replaceExpression(defaultRes), true
 	}

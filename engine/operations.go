@@ -3,7 +3,6 @@ package engine
 import (
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/cassius0924/jtgo/util"
 	"github.com/tidwall/gjson"
@@ -24,9 +23,9 @@ func (e *JTEngine) replaceExpression(input *gjson.Result) any {
 		)
 
 		input.ForEach(func(field, node gjson.Result) bool {
-			fieldName := strings.TrimSpace(field.String())
+			fieldName := normalizeFieldName(field.String())
 
-			switch DetectKeyword(fieldName) {
+			switch detectKeyword(fieldName) {
 			case KeywordReturn:
 				// 遇到 RETURN 关键词，直接返回
 				resultForReturn = e.returnResult(&node)
@@ -90,7 +89,7 @@ func (e *JTEngine) doOperations(object *gjson.Result) {
 	case object.IsObject():
 		object.ForEach(func(key, value gjson.Result) bool {
 			// key是表达式，value是操作
-			keyName := strings.TrimSpace(key.String())
+			keyName := normalizeFieldName(key.String())
 			expression, isExpression := extractExpression(keyName)
 			if !isExpression { // 不是表达式，则跳过
 				slog.WarnContext(e.ctx, "[JsonTemplateEngine.doOperations] key is not an expression, please check whether the key is an expression!", "key", keyName)
@@ -133,7 +132,7 @@ func (e *JTEngine) varAssignment(object *gjson.Result) {
 	case object.IsObject():
 		object.ForEach(func(key, value gjson.Result) bool {
 			// key是变量名或表达式，value是变量值
-			keyName := strings.TrimSpace(key.String())
+			keyName := normalizeFieldName(key.String())
 			expression, isExpression := extractExpression(keyName)
 			// 不是表达式，是变量名，则创建变量
 			if !isExpression {

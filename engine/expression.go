@@ -108,8 +108,6 @@ func (e *JTEngine) exprRun(program *vm.Program) (any, error) {
 		dataset:           e.dataset, // 继承数据集
 		fns:               e.fns,
 		localVariables:    make(map[string]any),
-		exprTraces:        e.exprTraces,
-		matchedExprTraces: e.matchedExprTraces,
 	}
 	e.ctx = context.WithValue(e.ctx, JSONTemplateEngineCtxKey, subEngine)
 	env["ctx"] = e.ctx
@@ -129,7 +127,6 @@ func (e *JTEngine) evaluateExpression(expression string) (any, error) {
 		slog.WarnContext(e.ctx, "[JsonTemplateEngine.evaluateExpression] expr.Run err", "expression", expression, "error", err)
 		return nil, err
 	}
-	e.exprTraces[expression] = result
 	slog.InfoContext(e.ctx, fmt.Sprintf("[JsonTemplateEngine.evaluateExpression] expr.Run success,\nexpression = %s,\nresult = %v", expression, result))
 	return result, nil
 }
@@ -151,4 +148,10 @@ func (e *JTEngine) evaluateExpressionToBool(expression string) (bool, error) {
 		}
 	}
 	return isBoolResult, nil
+}
+
+// normalizeFieldName 规范化字段名称
+func normalizeFieldName(fieldName string) string {
+	// 去掉头尾空格
+	return strings.TrimSpace(fieldName)
 }

@@ -5,6 +5,7 @@ go 1.22
 require (
 	github.com/bytedance/sonic v1.13.2
 	github.com/davecgh/go-spew v1.1.1
+	github.com/liyue201/gostl v1.2.0
 	github.com/samber/lo v1.49.1
 	github.com/smartystreets/goconvey v1.8.1
 	github.com/spf13/cast v1.7.1

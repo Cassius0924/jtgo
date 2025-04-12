@@ -44,16 +44,6 @@ type JTEngine struct {
 	compiledExps      map[string]*vm.Program // 缓存编译过的表达式
 	fns               map[string]any         // 函数集合
 	localVariables    map[string]any         // 局部变量名称和值
-	exprTraces        map[string]any         // 详细trace
-	matchedExprTraces map[string]any         // 条件语句分支trace
-}
-
-func (e *JTEngine) ExprTraces() map[string]any {
-	return e.exprTraces
-}
-
-func (e *JTEngine) MatchedExprTraces() map[string]any {
-	return e.matchedExprTraces
 }
 
 // WithDataset 设置数据集
@@ -123,8 +113,6 @@ func GetJSONTemplateEngine(ctx context.Context, templateID, template string) (*J
 			compiledExps:      cachedCompiledExps.(map[string]*vm.Program), // 使用原缓存编译过的表达式
 			fns:               lo.Assign(builtInFuncCollection, cachedCustomFuncs.(map[string]any)),
 			localVariables:    make(map[string]any),
-			exprTraces:        make(map[string]any),
-			matchedExprTraces: make(map[string]any),
 		}, nil
 	}
 
@@ -146,8 +134,6 @@ func createJSONTemplateEngine(ctx context.Context, templateID, template string) 
 		compiledExps:      make(map[string]*vm.Program),
 		fns:               lo.Assign(builtInFuncCollection, customFns.(map[string]any)), // 合并内置函数和自定义函数
 		localVariables:    make(map[string]any),
-		exprTraces:        make(map[string]any),
-		matchedExprTraces: make(map[string]any),
 	}
 
 	err := engine.preCompileExpressions(template)

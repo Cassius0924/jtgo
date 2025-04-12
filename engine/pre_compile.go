@@ -2,7 +2,6 @@ package engine
 
 import (
 	"log/slog"
-	"strings"
 
 	"github.com/cassius0924/jtgo/werror"
 	"github.com/tidwall/gjson"
@@ -29,8 +28,7 @@ func (e *JTEngine) recursivePreCompile(configResult gjson.Result) {
 			return true
 		}
 
-		// 去掉头尾空格
-		fieldName := strings.TrimSpace(field.String())
+		fieldName := normalizeFieldName(field.String())
 		// 去掉${}符号，提取表达式
 		expression, isExpression := extractExpression(fieldName)
 

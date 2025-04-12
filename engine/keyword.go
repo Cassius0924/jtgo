@@ -15,8 +15,8 @@ const (
 	KeywordElse    Keyword = "@else"
 )
 
-// DetectKeyword 检测关键词
-func DetectKeyword(input string) Keyword {
+// detectKeyword 检测关键词
+func detectKeyword(input string) Keyword {
 	return Keyword(strings.ToLower(input))
 }
 
