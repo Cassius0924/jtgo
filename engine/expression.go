@@ -55,42 +55,6 @@ func (e *JTEngine) evaluateExpressionsInText(input string) any {
 	return input
 }
 
-// func convertAnyToString(ctx context.Context, input any) (string, bool) {
-// 	var resultStr string
-// 	switch v := input.(type) {
-// 	case string:
-// 		resultStr = input.(string)
-// 	case *string:
-// 		resultStr = *input.(*string)
-// 	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-// 		resultStr = fmt.Sprintf("%d", v)
-// 	case *int, *int8, *int16, *int32, *int64, *uint, *uint8, *uint16, *uint32, *uint64:
-// 		resultStr = fmt.Sprintf("%d", reflect.ValueOf(v).Elem().Int())
-// 	case float64, float32:
-// 		resultStr = fmt.Sprintf("%f", v)
-// 	case *float64, *float32:
-// 		resultStr = fmt.Sprintf("%f", reflect.ValueOf(v).Elem().Float())
-// 	case bool:
-// 		resultStr = strconv.FormatBool(v)
-// 	case *bool:
-// 		resultStr = strconv.FormatBool(reflect.ValueOf(v).Elem().Bool())
-// 	case nil:
-// 		resultStr = ""
-// 	default:
-// 		inputType := reflect.TypeOf(input)
-// 		// 数组和map类型忽略
-// 		if inputType.Kind() == reflect.Array || inputType.Kind() == reflect.Slice || inputType.Kind() == reflect.Map {
-// 			resultStr = ""
-// 		} else if inputType.Kind() != reflect.Ptr { // 这里是为了处理别名的情况
-// 			resultStr = fmt.Sprintf("%v", input)
-// 		} else {
-// 			slog.ErrorContext(ctx, "[convertAnyToString] unsupported type", "input", input, "type", inputType)
-// 			return "", false
-// 		}
-// 	}
-// 	return resultStr, true
-// }
-
 // extractExpression 将input字符串的所有variable符号去除，只留下表达式，strings库替换比正则替换更快
 func extractExpression(input string) (string, bool) {
 	result := strings.ReplaceAll(input, expressionFlagPrefix, "")
