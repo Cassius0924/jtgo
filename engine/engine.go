@@ -102,14 +102,10 @@ func GetJSONTemplateEngine(ctx context.Context, templateID, template string) (*J
 		return nil, werror.ErrTemplateIsEmpty
 	}
 
-	isTemplateValidJSON := sonic.ValidString(template)
-	if !isTemplateValidJSON {
-		slog.ErrorContext(ctx, "[JSONTemplateEngine.GetJSONTemplateEngine] template is not a valid json, please check template JSON!", "templateID", templateID, "template", template)
-	}
-
+	isVaild := isTemplateJSONValid(ctx, template)
 	cachedTemplate, _ := templateIDToTemplate.Load(templateID)
 
-	if template == cachedTemplate || !isTemplateValidJSON { // 模板无更新 或 模板格式不合法 则使用缓存
+	if template == cachedTemplate || !isVaild { // 模板无更新 或 模板格式不合法 则使用缓存
 		if cachedTemplate == nil {
 			slog.ErrorContext(ctx, "[JSONTemplateEngine.GetJSONTemplateEngine] template is empty", "templateID", templateID)
 			return nil, werror.ErrTemplateIsEmpty
@@ -140,7 +136,7 @@ func GetJSONTemplateEngine(ctx context.Context, templateID, template string) (*J
 func createJSONTemplateEngine(ctx context.Context, templateID, template string) (*JTEngine, error) {
 	customFns, _ := templateIDToCustomFuncs.LoadOrStore(templateID, make(map[string]any))
 
-	slog.InfoContext(ctx, "[JSONTemplateEngine.GetJSONTemplateEngine] template is updated, running preCompileExpressions", "templateID", templateID, "template", template, "customFunction count", len(customFns.(map[string]any)))
+	slog.InfoContext(ctx, "[JSONTemplateEngine.GetJSONTemplateEngine] template is updated, running preCompileExpressions", "templateID", templateID, "template", template, "custom function count", len(customFns.(map[string]any)))
 
 	engine := &JTEngine{
 		ctx:               ctx,
@@ -162,11 +158,19 @@ func createJSONTemplateEngine(ctx context.Context, templateID, template string) 
 	templateIDToTemplate.Store(templateID, template)
 	templateIDToCompiledExps.Store(templateID, engine.compiledExps)
 
-	slog.InfoContext(ctx, "[JSONTemplateEngine.GetJSONTemplateEngine] running preCompileExpressions finish")
+	slog.InfoContext(ctx, "[JSONTemplateEngine.GetJSONTemplateEngine] create JSON template engine success", "templateID", templateID)
 	return engine, nil
 }
 
 // GetJSONTemplateEngineFromContext 从context中获取JSONTemplateEngine，用于嵌套解析
 func GetJSONTemplateEngineFromContext(ctx context.Context) *JTEngine {
 	return ctx.Value(JSONTemplateEngineCtxKey).(*JTEngine)
+}
+
+func isTemplateJSONValid(ctx context.Context, template string) bool {
+	valid := sonic.ValidString(template)
+	if !valid {
+		slog.ErrorContext(ctx, "[JSONTemplateEngine.isTemplateJSONValid] template is not a valid json, please check template JSON!", "template", template)
+	}
+	return valid
 }

@@ -23,32 +23,35 @@ func (e *JTEngine) replaceExpression(input *gjson.Result) any {
 			isExpression    bool
 		)
 
-		input.ForEach(func(field, object gjson.Result) bool {
+		input.ForEach(func(field, node gjson.Result) bool {
 			fieldName := strings.TrimSpace(field.String())
-			var expression string
-			expression, isExpression = extractExpression(fieldName)
+
+			switch DetectKeyword(fieldName) {
+			case KeywordReturn:
+				// 遇到 RETURN 关键词，直接返回
+				resultForReturn = e.returnResult(&node)
+				return false
+			case KeywordDo:
+				// 是 DO 关键词，需要执行操作
+				e.doOperations(&node)
+				return true
+			case KeywordVar:
+				// 是 VAR 关键词，需要进行变量赋值
+				e.varAssignment(&node)
+				return true
+			default:
+				// 其他情况，继续处理
+			}
+			_, isExpression = extractExpression(fieldName)
 			if !isExpression {
-				result[fieldName] = e.replaceExpression(&object)
+				result[fieldName] = e.replaceExpression(&node)
 				return true
 			}
 
-			if IsKeywordDo(expression) {
-				// 是 DO 关键词，需要执行操作
-				e.doOperations(&object)
-				return true
-			} else if IsKeywordVar(expression) {
-				// 是 VAR 关键词，需要进行变量赋值
-				e.varAssignment(&object)
-				return true
-			} else if IsKeywordReturn(expression) {
-				// 遇到 RETURN 关键词，直接返回
-				resultForReturn = e.returnResult(&object)
-				return false
-			}
 			return true
 		})
 
-		if isExpression {
+		if resultForReturn != nil {
 			return resultForReturn
 		}
 		return result
@@ -91,10 +94,6 @@ func (e *JTEngine) doOperations(object *gjson.Result) {
 			expression, isExpression := extractExpression(keyName)
 			if !isExpression { // 不是表达式，则跳过
 				slog.WarnContext(e.ctx, "[JsonTemplateEngine.doOperations] key is not an expression, please check whether the key is an expression!", "key", keyName)
-				return true
-			}
-			if IsKeywordDefault(expression) {
-				e.doOperations(&value)
 				return true
 			}
 			isBoolResult, err := e.evaluateExpressionToBool(expression)

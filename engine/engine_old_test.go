@@ -80,7 +80,7 @@ func TestConfigEngine_CreateEngine(t *testing.T) {
 						"toInt(${Request.Scene}) == 1 && ${Request.Type} == 'a'": null,
 						"toInt(${Request.Scene}) == 2 && ${Request.Type} == 'b'": {},
 						"toInt(${Request.Scene}) == 3 && ${Request.Type} == 'c'": "近期直播内容",
-						"${DEFAULT}": "近期内容"
+						"@default": "近期内容"
 					}
 				}
 			}
@@ -117,7 +117,7 @@ func TestConfigEngine_CreateEngine(t *testing.T) {
 				"sub_title": {
 					"sub_title_text": {
 						"toInt(${Request.Scene}) == 1 && ${Request.Type} == 'a'": null,
-						"${DEFAULT}": "近期内容"
+						"@default": "近期内容"
 					}
 				},
 			}
@@ -143,7 +143,7 @@ func TestConfigEngine_Run_CustomFunction(t *testing.T) {
 					"sub_title": {
 						"sub_title_text": {
 							"toIntV1(${Request.Scene}) == 1 && ${Request.Type} == 'a'": "近期直播内容" ,
-							"${DEFAULT}": "近期内容"
+							"@default": "近期内容"
 						}
 					}
 				}
@@ -218,7 +218,7 @@ func TestConfigEngine_Run_Default(t *testing.T) {
 							"${Request.Scene} == 1 && ${Request.Type} == 'a'": null,
 							"${Request.Scene} == 2 && ${Request.Type} == 'b'": {},
 							"${Request.Scene} == 3 && ${Request.Type} == 'c'": "近期直播内容" ,
-							"${DEFAULT}": "近期内容"
+							"@default": "近期内容"
 						}
 					}
 				}
@@ -255,10 +255,10 @@ func TestConfigEngine_Run_Default(t *testing.T) {
 				"promote_game_module_info": {
 					"sub_title": {
 						"sub_title_text": {
-							"${DEFAULT}": "近期内容1",
+							"@default": "近期内容1",
 							"${Request.Scene} == 1 && ${Request.Type} == 'a'": null,
 							"${Request.Scene} == 2 && ${Request.Type} == 'b'": {},
-							"${DEFAULT}": "近期内容2",
+							"@default": "近期内容2",
 							"${Request.Scene} == 3 && ${Request.Type} == 'c'": "近期直播内容"
 						}
 					}
@@ -279,15 +279,15 @@ func TestConfigEngine_Run_ReplaceVariable(t *testing.T) {
 		{
 			"promote_game_module_info": {
 				"sub_title": {
-					"${DEFAULT}": {
+					"@default": {
 						"sub_title_text": "${SubTitleText}"
 					}
 				},
 				"icon_url": {
-					"${DEFAULT}": "${PromoteGame.GameInfo.Icon}"
+					"@default": "${PromoteGame.GameInfo.Icon}"
 				},
 				"title": {
-					"${DEFAULT}": "这是${PromoteGame.GameInfo.Name} ${PromoteGame.GameInfo.Type}游戏"    
+					"@default": "这是${PromoteGame.GameInfo.Name} ${PromoteGame.GameInfo.Type}游戏"    
 				}
 			}
 		}
@@ -319,12 +319,12 @@ func TestConfigEngine_Run_MultiModule(t *testing.T) {
 		{
 			"promote_game_module_info": {
 				"icon_url": {
-					"${DEFAULT}": "${PromoteGame.GameInfo.Icon}"
+					"@default": "${PromoteGame.GameInfo.Icon}"
 				}
 			},
 			"other_module": {
 				"title": {
-					"${DEFAULT}": "这是${PromoteGame.GameInfo.Name}游戏"    
+					"@default": "这是${PromoteGame.GameInfo.Name}游戏"    
 				}
 			}
 		}
@@ -357,7 +357,7 @@ func TestConfigEngine_Run_InvalidParams(t *testing.T) {
 		{
 			"promote_game_module_info": {
 				"icon_url": {
-					"${DEFAULT}": "${PromoteGame.GameInfo.Icon}"
+					"@default": "${PromoteGame.GameInfo.Icon}"
 				}
 			}
 		}
@@ -398,28 +398,28 @@ func TestConfigEngine_Run_BaseType(t *testing.T) {
 		{
 			"promote_game_module_info": {
 				"a_string": {
-					"${DEFAULT}": "string"
+					"@default": "string"
 				},
 				"ptr_a_string": {
-					"${DEFAULT}": "ptr_string"
+					"@default": "ptr_string"
 				},
 				"a_int": {	
-					"${DEFAULT}": 1
+					"@default": 1
 				},
 				"ptr_a_int": {
-					"${DEFAULT}": 2
+					"@default": 2
 				},	
 				"a_float": {	
-					"${DEFAULT}": 3.1
+					"@default": 3.1
 				},
 				"ptr_a_float": {	
-					"${DEFAULT}": 4.1
+					"@default": 4.1
 				},
 				"a_bool": {	
-					"${DEFAULT}": true
+					"@default": true
 				},	
 				"ptr_a_bool": {
-					"${DEFAULT}": false
+					"@default": false
 				}
 			}
 		}
@@ -446,12 +446,12 @@ func TestConfigEngine_Run_StructType(t *testing.T) {
 		{
 			"promote_game_module_info": {
 				"a_object": {
-					"${DEFAULT}": {
+					"@default": {
 						"name": "object"
 					}
 				},
 				"ptr_a_object": {
-					"${DEFAULT}": {
+					"@default": {
 						"name": "ptr_object"
 					}
 				}
@@ -474,7 +474,7 @@ func TestConfigEngine_Run_ArrayType(t *testing.T) {
 		{
 			"promote_game_module_info": {
 				"a_array": {
-					"${DEFAULT}": [1, 2, 3, 4]
+					"@default": [1, 2, 3, 4]
 				}
 			}
 		}
@@ -494,7 +494,7 @@ func TestConfigEngine_Run_MapType(t *testing.T) {
 		{
 			"promote_game_module_info": {
 				"a_map": {
-					"${DEFAULT}": {
+					"@default": {
 						"key": "value"
 					}
 				}
@@ -516,10 +516,10 @@ func TestConfigEngine_Run_Enum(t *testing.T) {
 		{
 			"promote_game_module_info": {
 				"a_enum": {
-					"${DEFAULT}": 1
+					"@default": 1
 				},
 				"ptr_a_enum": {
-					"${DEFAULT}": 2
+					"@default": 2
 				}
 			}
 		}
@@ -545,7 +545,7 @@ func TestConfigEngine_Run_Expression(t *testing.T) {
 					"${Request.Scene} == 3 && ${Request.Type} == 'c'": {
 						"sub_title_text": "近期直播内容"
 					},	
-					"${DEFAULT}": {
+					"@default": {
 						"sub_title_text": "近期内容"
 					}
 				},
@@ -556,13 +556,13 @@ func TestConfigEngine_Run_Expression(t *testing.T) {
 					"${Request.Scene} == 3 && ${Request.Type} == 'c'": {
 						"button_text": "已添加"
 					},
-					"${DEFAULT}": {
+					"@default": {
 						"button_text": "默认添加"
 					}
 				},
 				"icon_url": {
 					"${Request.Scene} == 1 && ${Request.Type} == 'a'": null,
-					"${DEFAULT}": "HTTP"
+					"@default": "HTTP"
 				}
 			}
 		}
@@ -627,7 +627,7 @@ func TestConfigEngine_Run_WrongExpression(t *testing.T) {
 					"${Request.Scene} == 2 + ${Request.Type} == 'b'": "b",
 					"${Request.Scene} == 3s ${Request.Type} == 'c'": "c",
 					"${Request.Scene}": "d",
-					"${DEFAULT}": "e"
+					"@default": "e"
 				}
 			}
 		}	
@@ -654,7 +654,7 @@ func TestConfigEngine_Run_WrongDataset(t *testing.T) {
 				"sub_title": {
 					"sub_title_text": {
 						"${Request} != nil && ${Request.Scene} == 1": "游戏名为${Name_Wrong}",
-						"${DEFAULT}": "游戏"
+						"@default": "游戏"
 					}
 				}
 			}
@@ -691,7 +691,7 @@ func TestConfigEngine_Run_ExpressionInValue(t *testing.T) {
 					"sub_title_text": {
 						"${Request.Scene == 1}": "${GetName(DATASET)}",
 						"${Request.Scene == 2}": "你好${Echo}，测试不存在字段：${NotExist.Var}，测试不存在函数：${NotExistFunction()}，测试List：${GenerateList()}，测试Object：${GenerateObject()}，测试Bool：${GenerateBool()}，测试Int：${GenerateInt()}，测试String：${GenerateString()}",
-						"${DEFAULT}": "???"
+						"@default": "???"
 					}
 				}
 			}
@@ -768,7 +768,7 @@ func TestConfigEngine_Run_MainEntry(t *testing.T) {
 				"sub_title": {
 					"sub_title_text": {
 						"${Request.Scene == 1}": "123123",
-						"${DEFAULT}": "???"
+						"@default": "???"
 					}
 				}
 			}
@@ -791,15 +791,15 @@ func TestConfigEngine_Run_AssembleList(t *testing.T) {
 		{
 			"_main_": {
 				"button_list": {
-					"${DEFAULT}": "${assembleButtonList(DATASET, 'button')}"    
+					"@default": "${assembleButtonList(DATASET, 'button')}"    
 				},
 				"a_bool": {
-					"${DEFAULT}": "${testFunc(DATASET, '12')}"
+					"@default": "${testFunc(DATASET, '12')}"
 				}
 			},
 			"button": {
 				"button_text": {
-					"${DEFAULT}": "${GameInfo.Name}"
+					"@default": "${GameInfo.Name}"
 				}
 			}
 		}
@@ -862,7 +862,7 @@ func TestConfigEngine_Run_calculateExpressionByExps(t *testing.T) {
 		{
 			"_main_": {
 				"title": {
-					"${DEFAULT}": "${GetAInt()} + ${GetAFloat()} + ${GetABool()} + ${GetAStr()}"
+					"@default": "${GetAInt()} + ${GetAFloat()} + ${GetABool()} + ${GetAStr()}"
 				}
 			}
 		}
@@ -902,7 +902,7 @@ func TestConfigEngine_Run_BuiltInDate(t *testing.T) {
 		{
 			"_main_": {
 				"title": {
-					"${DEFAULT}": "${ToString(now().Year())}"
+					"@default": "${ToString(now().Year())}"
 				}
 			}
 		}
@@ -922,11 +922,11 @@ func TestConfigEngine_Run_BoolPtrDataset(t *testing.T) {
 			{
 				"_main_": {
 					"title": {
-						"${DEFAULT}": "${IsBoolPtr == true ? '123' : 'abc'}"
+						"@default": "${IsBoolPtr == true ? '123' : 'abc'}"
 					},
 					"sub_title": {
 						"sub_title_text":{
-							"${DEFAULT}": "${ToBool(Env.IsBoolPtr) ? '123' : 'abc'}"
+							"@default": "${ToBool(Env.IsBoolPtr) ? '123' : 'abc'}"
 						}
 					}
 				}
@@ -959,11 +959,11 @@ func TestConfigEngine_Run_BoolPtrDataset(t *testing.T) {
 			{
 				"_main_": {
 					"title": {
-						"${DEFAULT}": "${IsIntPtr == 1 ? 'webcast' : 'game'}"
+						"@default": "${IsIntPtr == 1 ? 'webcast' : 'game'}"
 					},
 					"sub_title": {
 						"sub_title_text":{
-							"${DEFAULT}": "${Env.IsIntPtr != 1 ? 'webcast' : 'game'}"
+							"@default": "${Env.IsIntPtr != 1 ? 'webcast' : 'game'}"
 						}
 					}
 				}
@@ -999,7 +999,7 @@ func TestConfigEngine_Run_ObjectAndKV(t *testing.T) {
 			{
 				"_main_": {
 					"title": {
-						"${DEFAULT}": "${toJSON(Object( KV('name', Data.Name), KV('age', 30), KV('object', Object( KV('ha', 'ha') ) ) ))}"
+						"@default": "${toJSON(Object( KV('name', Data.Name), KV('age', 30), KV('object', Object( KV('ha', 'ha') ) ) ))}"
 					}
 				}
 			}
@@ -1031,11 +1031,11 @@ func TestConfigEngine_Run_Use(t *testing.T) {
 			{
 				"_main_": {
 					"title": {
-						"${DEFAULT}": "${toJSON(Use('test'))}"
+						"@default": "${toJSON(Use('test'))}"
 					}
 				},
 				"test": {
-					"${DEFAULT}": {
+					"@default": {
 						"name": "John",
 						"age": "${Age}"
 					}
@@ -1060,12 +1060,12 @@ func TestConfigEngine_Run_Use(t *testing.T) {
 			{
 				"_main_": {
 					"title": {
-						"${DEFAULT}": "${ToString(Use('test.sub_test'))}"
+						"@default": "${ToString(Use('test.sub_test'))}"
 					}
 				},
 				"test": {
 					"sub_test": {
-						"${DEFAULT}": "${Yes}"
+						"@default": "${Yes}"
 					}
 				}
 			}
@@ -1088,14 +1088,14 @@ func TestConfigEngine_Run_Use(t *testing.T) {
 			{
 				"_main_": {
 					"title": {	
-						"${VAR}": {
+						"@var": {
 							"List1": "${map(Acts, Use('test', Var('Item', #) ) )}"
 						},
-						"${DEFAULT}": "${join(List1)}"
+						"@default": "${join(List1)}"
 					}
 				},
 				"test": {
-					"${DEFAULT}": "${Item + Base}"
+					"@default": "${Item + Base}"
 				}
 			}
 			`
@@ -1121,35 +1121,35 @@ func TestConfigEngine_Run_ReturnAndDo(t *testing.T) {
 			configJSON := `
 			{
 				"_main_": {
-					"${DO}": "${Dec(Age, 5)}",
-					"${DO}": {
+					"@do": "${Dec(Age, 5)}",
+					"@do": {
 						"${Age > 1000}": "${Dec(Age, 1000)}",
 						"${Age < 1000}": "${Inc(Age, 1)}",
 						"${Age < 1000}": "${Inc(Age, 1)}",
 						"${true}": "${Inc(Age, 1)}"
 					},
 					"title": {
-						"${DEFAULT}": {
-							"${DO}": [
+						"@default": {
+							"@do": [
 								"${Inc(Age)}",
 								"${Dec(Age)}",
 								"${Inc(Age, 20)}"
 							],
-							"${DO}": [
+							"@do": [
 								"${Dec(Age, 10)}"
 							],
-							"${DO}": "${Dec(Age, 5) && Inc(Age, 5)}",
-							"${DO}": "${Dec(ABool) && Inc(Age, 2)}",
-							"${DO}": "${Dec(NotPtrAge, 10)}",
-							"${RETURN}": "haha",
-							"${DO}": "${Dec(Age, 100)}"
+							"@do": "${Dec(Age, 5) && Inc(Age, 5)}",
+							"@do": "${Dec(ABool) && Inc(Age, 2)}",
+							"@do": "${Dec(NotPtrAge, 10)}",
+							"@return": "haha",
+							"@do": "${Dec(Age, 100)}"
 						}
 					},
 					"sub_title": {
 						"sub_title_text":{
 							"${Age in [24]}": "haha",
-							"${DEFAULT}": {
-								"${RETURN}": "ok"
+							"@default": {
+								"@return": "ok"
 							}
 						}
 					}
@@ -1181,12 +1181,12 @@ func TestConfigEngine_Run_ReturnAndDo(t *testing.T) {
 			{
 				"_main_": {
 					"title": {
-						"${DEFAULT}": {
-							"${VAR}": {
+						"@default": {
+							"@var": {
 								"Num": "${Int64Ptr(0)}"
 							},
 							"DO": "${Inc(Num)}",
-							"${RETURN}": "${'haha' + ToString(Num)}"
+							"@return": "${'haha' + ToString(Num)}"
 						}
 					}
 				}
@@ -1211,15 +1211,15 @@ func TestConfigEngine_Run_CreateVar(t *testing.T) {
 			{
 				"_main_": {
 					"title": {	
-						"${VAR}": {
+						"@var": {
 							"A": 18,
 							"B": "${A + 2}"
 						},
-						"${DEFAULT}": "${string(A)}"
+						"@default": "${string(A)}"
 					},
 					"sub_title": {
 						"sub_title_text": {
-							"${DEFAULT}": "${string(B)}"
+							"@default": "${string(B)}"
 						}
 					}
 				}
@@ -1238,18 +1238,18 @@ func TestConfigEngine_Run_CreateVar(t *testing.T) {
 			{
 				"_main_": {
 					"title": {	
-						"${VAR}": {
+						"@var": {
 							"P": "${Persons}"
 						},
-						"${DEFAULT}": "${join(P)}"
+						"@default": "${join(P)}"
 					},
 					"sub_title": {
 						"sub_title_text": {
-							"${DEFAULT}": {
-								"${VAR}": {
+							"@default": {
+								"@var": {
 									"P": "${concat(P, ['sim'])}"
 								},
-								"${RETURN}": "${join(P)}"
+								"@return": "${join(P)}"
 							}
 						}
 					}
@@ -1273,17 +1273,17 @@ func TestConfigEngine_Run_CreateVar(t *testing.T) {
 			{
 				"_main_": {
 					"title": {	
-						"${VAR}": {
+						"@var": {
 							"A": "123"
 						},
-						"${DEFAULT}": "${A + Use('test')}"
+						"@default": "${A + Use('test')}"
 					}
 				},
 				"test": {
-					"${VAR}": {
+					"@var": {
 						"A": "456"
 					},
-					"${DEFAULT}": "${A}"
+					"@default": "${A}"
 				}
 			}
 			`
@@ -1304,7 +1304,7 @@ func TestConfigEngine_Run_VarNestedExpression(t *testing.T) {
 			{
 				"_main_": {
 					"title": {	
-						"${VAR}": {
+						"@var": {
 							"Skd": "abc",
 							"${ATrue}": {
 								"Tek": "123",
@@ -1319,14 +1319,14 @@ func TestConfigEngine_Run_VarNestedExpression(t *testing.T) {
 							"Vas": "233",
 							"Abc": "haha"
 						},
-						"${DEFAULT}": "${Use('test', Var('U3', 'uuu')) + Skd + Tek + Fjs + ToString(Sek) + Vas + Abc}"
+						"@default": "${Use('test', Var('U3', 'uuu')) + Skd + Tek + Fjs + ToString(Sek) + Vas + Abc}"
 					}
 				},
 				"test": {
-					"${VAR}": {
+					"@var": {
 						"SSR": "ssr"
 					},
-					"${DEFAULT}": "${U3}"
+					"@default": "${U3}"
 				}
 			}
 			`

@@ -6,14 +6,19 @@ type Keyword string
 
 const (
 	// 关键词
-	KeywordDefualt Keyword = "default"
-	KeywordDo      Keyword = "do"
-	KeywordReturn  Keyword = "return"
-	KeywordVar     Keyword = "var"
-	KeywordFor     Keyword = "for"
-	KeywordIf      Keyword = "if"
-	KeywordElse    Keyword = "else"
+	KeywordDefault Keyword = "@default"
+	KeywordDo      Keyword = "@do"
+	KeywordReturn  Keyword = "@return"
+	KeywordVar     Keyword = "@var"
+	KeywordFor     Keyword = "@for"
+	KeywordIf      Keyword = "@if"
+	KeywordElse    Keyword = "@else"
 )
+
+// DetectKeyword 检测关键词
+func DetectKeyword(input string) Keyword {
+	return Keyword(strings.ToLower(input))
+}
 
 func IsKeywordDo(input string) bool {
 	return strings.ToLower(input) == string(KeywordDo)
@@ -28,7 +33,7 @@ func IsKeywordVar(input string) bool {
 }
 
 func IsKeywordDefault(input string) bool {
-	return strings.ToLower(input) == string(KeywordDefualt)
+	return strings.ToLower(input) == string(KeywordDefault)
 }
 
 func IsKeywordFor(input string) bool {
