@@ -135,20 +135,11 @@ func (e *JTEngine) evaluateExpressionToBool(expression string) (bool, error) {
 		return false, err
 	}
 	// 把result转换为bool
-	isBoolResult, ok := result.(bool) // double check
-	if !ok {
-		if boolPtr, ok := result.(*bool); ok && boolPtr != nil {
-			isBoolResult = *boolPtr
-		} else {
-			slog.WarnContext(e.ctx, "[JsonTemplateEngine.recursiveParse] exprResult not bool, please check expression", "expression", expression, "result", result)
-			return false, werror.ErrExpressionResultNotBool
-		}
+	isBoolResult, castErr := cast.ToBoolE(result)
+	if castErr != nil {
+		slog.WarnContext(e.ctx, "[JsonTemplateEngine.evaluateExpressionToBool] exprResult not bool, please check expression", "expression", expression, "result", result)
+		return false, werror.ErrExpressionResultNotBool
 	}
-	//	isBoolResult, castErr := cast.ToBoolE(result)
-	// if castErr != nil {
-	// 	slog.WarnContext(e.ctx, "[JsonTemplateEngine.evaluateExpressionToBool] exprResult not bool, please check expression", "expression", expression, "result", result)
-	// 	return false, werror.ErrExpressionResultNotBool
-	// }
 	return isBoolResult, nil
 }
 

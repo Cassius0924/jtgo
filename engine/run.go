@@ -116,7 +116,7 @@ func (e *JTEngine) interativeParse(templateNode gjson.Result, entry string) any 
 
 		fieldName := normalizeFieldName(field.String())
 
-		switch keyword, extra := detectKeyword(fieldName); keyword {
+		switch keyword, _ := detectKeyword(fieldName); keyword {
 		case KeywordDo:
 			e.doOperations(&node)
 			continue
@@ -130,13 +130,13 @@ func (e *JTEngine) interativeParse(templateNode gjson.Result, entry string) any 
 			continue
 		case KeywordIf:
 			// 与if、else和for都当前帧相关，需要传入当前帧
-			e.controlFlowIf(&node, extra, frame)
+			// e.controlFlowIf(&node, extra, frame)
 			continue
 		case KeywordElse:
-			e.controlFlowElse(&node, extra, frame)
+			// e.controlFlowElse(&node, extra, frame)
 			continue
 		case KeywordFor:
-			e.loop(&node, extra, frame)
+			// e.loop(&node, extra, frame)
 			continue
 		default:
 			// 其他情况，继续处理
@@ -168,7 +168,7 @@ func (e *JTEngine) interativeParse(templateNode gjson.Result, entry string) any 
 				continue
 			default:
 				// 其他类型直接赋值
-				frame.target.(map[string]any)[frame.fieldName] = e.replaceExpression(&node)
+				frame.target.(map[string]any)[fieldName] = e.replaceExpression(&node)
 				slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.interativeParse](trace) using default value,\nkey = %s,\nvalue = %s", frame.fieldName, node.String()))
 				continue
 			}

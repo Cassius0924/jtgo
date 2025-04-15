@@ -836,6 +836,7 @@ func TestConfigEngine_Run_BoolPtrDataset(t *testing.T) {
 			configJSON := `
 			{
 				"_main_": {
+					"icon_url": "http",
 					"title": {
 						"@default": "${IsBoolPtr == true ? '123' : 'abc'}"
 					},
@@ -865,6 +866,7 @@ func TestConfigEngine_Run_BoolPtrDataset(t *testing.T) {
 			result := PromoteGameModuleInfo{}
 			engine, _ := GetJSONTemplateEngine(context.Background(), "BoolPtrDataset", configJSON)
 			_ = engine.WithDataset(env).ParseTo(&result).Run()
+			convey.So(result.IconURL, convey.ShouldEqual, "http")
 			convey.So(result.Title, convey.ShouldEqual, "123")
 			convey.So(result.SubTitle.SubTitleText, convey.ShouldEqual, "abc")
 		}
