@@ -25,7 +25,7 @@ func (e *JTEngine) replaceExpression(input *gjson.Result) any {
 		input.ForEach(func(field, node gjson.Result) bool {
 			fieldName := normalizeFieldName(field.String())
 
-			switch detectKeyword(fieldName) {
+			switch keyword, _ := detectKeyword(fieldName); keyword {
 			case KeywordReturn:
 				// 遇到 RETURN 关键词，直接返回
 				resultForReturn = e.returnResult(&node)
@@ -72,13 +72,13 @@ func (e *JTEngine) replaceExpression(input *gjson.Result) any {
 }
 
 // doOperations 处理DO操作
-func (e *JTEngine) doOperations(object *gjson.Result) {
-	if !object.Exists() {
+func (e *JTEngine) doOperations(node *gjson.Result) {
+	if !node.Exists() {
 		return
 	}
 	switch {
-	case object.IsArray(): // 是数组，则遍历处理
-		object.ForEach(func(_, value gjson.Result) bool {
+	case node.IsArray(): // 是数组，则遍历处理
+		node.ForEach(func(_, value gjson.Result) bool {
 			if value.Type != gjson.String {
 				return true
 			}
@@ -86,8 +86,8 @@ func (e *JTEngine) doOperations(object *gjson.Result) {
 			e.evaluateExpressionsInText(value.String())
 			return true
 		})
-	case object.IsObject():
-		object.ForEach(func(key, value gjson.Result) bool {
+	case node.IsObject():
+		node.ForEach(func(key, value gjson.Result) bool {
 			// key是表达式，value是操作
 			keyName := normalizeFieldName(key.String())
 			expression, isExpression := extractExpression(keyName)
@@ -107,30 +107,30 @@ func (e *JTEngine) doOperations(object *gjson.Result) {
 			}
 			return true
 		})
-	case object.Type == gjson.String:
-		slog.InfoContext(e.ctx, fmt.Sprintf("[JsonTemplateEngine.doOperations](trace) do operation.\noperation = %s", object.String()))
-		e.evaluateExpressionsInText(object.String())
+	case node.Type == gjson.String:
+		slog.InfoContext(e.ctx, fmt.Sprintf("[JsonTemplateEngine.doOperations](trace) do operation.\noperation = %s", node.String()))
+		e.evaluateExpressionsInText(node.String())
 	default:
 		return
 	}
 }
 
-func (e *JTEngine) returnResult(object *gjson.Result) any {
-	result := e.replaceExpression(object)
+func (e *JTEngine) returnResult(node *gjson.Result) any {
+	result := e.replaceExpression(node)
 	slog.InfoContext(e.ctx, fmt.Sprintf("[JsonTemplateEngine.returnResult](trace) return result,\nresult = %s", util.GenerateStructFormatedString(result)))
 	return result
 }
 
 // varAssignment 处理VAR变量赋值
-func (e *JTEngine) varAssignment(object *gjson.Result) {
-	if !object.Exists() {
+func (e *JTEngine) varAssignment(node *gjson.Result) {
+	if !node.Exists() {
 		return
 	}
 
 	switch {
 	// 只有Object类型才能进行变量赋值，其他类型均属于语法错误
-	case object.IsObject():
-		object.ForEach(func(key, value gjson.Result) bool {
+	case node.IsObject():
+		node.ForEach(func(key, value gjson.Result) bool {
 			// key是变量名或表达式，value是变量值
 			keyName := normalizeFieldName(key.String())
 			expression, isExpression := extractExpression(keyName)
@@ -167,6 +167,21 @@ func (e *JTEngine) varAssignment(object *gjson.Result) {
 			return true
 		})
 	default:
-		slog.ErrorContext(e.ctx, "[JsonTemplateEngine.varAssignment] do value is not an object, please check whether the do value is an object!", "doValue", object.String())
+		slog.ErrorContext(e.ctx, "[JsonTemplateEngine.varAssignment] do value is not an object, please check whether the do value is an object!", "doValue", node.String())
 	}
+}
+
+// controlFlowIf 处理IF控制流
+func (e *JTEngine) controlFlowIf(node *gjson.Result, extra string) {
+
+}
+
+// controlFlowElse 处理ELSE控制流
+func (e *JTEngine) controlFlowElse(node *gjson.Result, extra string) {
+
+}
+
+// controlFlowElse 处理ELSE控制流
+func (e *JTEngine) loop(node *gjson.Result, extra string) {
+
 }

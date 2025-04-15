@@ -5,7 +5,7 @@ import "strings"
 type Keyword string
 
 const (
-	// 关键词
+	// 关键词，全小写
 	KeywordDefault Keyword = "@default"
 	KeywordDo      Keyword = "@do"
 	KeywordReturn  Keyword = "@return"
@@ -15,9 +15,30 @@ const (
 	KeywordElse    Keyword = "@else"
 )
 
+var (
+	// Keywords 关键词列表
+	Keywords = []Keyword{
+		KeywordDefault,
+		KeywordDo,
+		KeywordReturn,
+		KeywordVar,
+		KeywordFor,
+		KeywordIf,
+		KeywordElse,
+	}
+)
+
 // detectKeyword 检测关键词
-func detectKeyword(input string) Keyword {
-	return Keyword(strings.ToLower(input))
+func detectKeyword(input string) (Keyword, string) {
+	// 不区分大小写
+	input = strings.ToLower(strings.TrimSpace(input))
+	for _, kw := range Keywords {
+		extra, ok := strings.CutPrefix(input, string(kw))
+		if ok {
+			return kw, extra
+		}
+	}
+	return "", ""
 }
 
 func IsKeywordDo(input string) bool {

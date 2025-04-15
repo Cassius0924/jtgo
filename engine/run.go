@@ -36,17 +36,6 @@ func (e *JTEngine) keepStatusRun() error {
 		return werror.ErrEntryNotFound
 	}
 
-	// 递归解析方法
-	// target := make(map[string]any)
-	// result, hasResult := e.recursiveParse(entryTemplateNode, target, e.entry)
-
-	// var finalTarget any
-	// if hasResult { // 如果顶层就是表达式，这里会有值，其他情况 result 为空
-	// 	finalTarget = result
-	// } else {
-	// 	finalTarget = target
-	// }
-
 	// 循环解析方法
 	finalTarget := e.interativeParse(entryTemplateNode, e.entry)
 
@@ -115,7 +104,7 @@ func (e *JTEngine) interativeParse(templateNode gjson.Result, entry string) any 
 			continue
 		}
 
-		// 去除当前值后，继续遍历，迭代器指向下一个元素
+		// 取出当前值后，继续遍历，迭代器指向下一个元素
 		pair := frame.curSubNode.Value()
 		field, node = pair.First, pair.Second
 		frame.curSubNode.Next()
@@ -127,7 +116,7 @@ func (e *JTEngine) interativeParse(templateNode gjson.Result, entry string) any 
 
 		fieldName := normalizeFieldName(field.String())
 
-		switch detectKeyword(fieldName) {
+		switch keyword, _ := detectKeyword(fieldName); keyword {
 		case KeywordDo:
 			e.doOperations(&node)
 			continue
@@ -140,12 +129,12 @@ func (e *JTEngine) interativeParse(templateNode gjson.Result, entry string) any 
 			}
 			continue
 		case KeywordIf:
-			// e.controlFlowIf(&node)
+			// e.controlFlowIf(&node, extra)
 			continue
 		case KeywordElse:
-			// e.controlFlowElse(&node)
+			// e.controlFlowElse(&node, extra)
 		case KeywordFor:
-			// e.loop(&node)
+			// e.loop(&node, extra)
 			continue
 
 		default:
