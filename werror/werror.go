@@ -15,6 +15,10 @@ var (
 	ErrTargetIsNil = errors.New("target of JSON template engine is nil")
 	// ErrParseToTargetFailed 模板引擎解析目标失败
 	ErrParseToTargetFailed = errors.New("JSON template engine parse to target failed")
+	// ErrCompiledExpressionNotFound 预编译的表达式未找到
+	ErrCompiledExpressionNotFound = errors.New("compiled expression not found")
+	// ErrExpressionResultNotBool 表达式结果不是bool类型
+	ErrExpressionResultNotBool = errors.New("expression result not bool")
 )
 
 // 合并错误

@@ -92,7 +92,7 @@ func (e *JTEngine) interativeParse(templateNode gjson.Result, entry string) any 
 			stack.Pop()
 
 			if frame.result != nil {
-				e.setExpressionResult(frame, entry)
+				e.setExpressionResult(frame)
 				slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.interativeParse](trace) using value,\nkey = %s,\nvalue = %s", frame.fieldName, frame.result.String()))
 			}
 
@@ -116,7 +116,7 @@ func (e *JTEngine) interativeParse(templateNode gjson.Result, entry string) any 
 
 		fieldName := normalizeFieldName(field.String())
 
-		switch keyword, _ := detectKeyword(fieldName); keyword {
+		switch keyword, extra := detectKeyword(fieldName); keyword {
 		case KeywordDo:
 			e.doOperations(&node)
 			continue
@@ -129,14 +129,15 @@ func (e *JTEngine) interativeParse(templateNode gjson.Result, entry string) any 
 			}
 			continue
 		case KeywordIf:
-			// e.controlFlowIf(&node, extra)
+			// 与if、else和for都当前帧相关，需要传入当前帧
+			e.controlFlowIf(&node, extra, frame)
 			continue
 		case KeywordElse:
-			// e.controlFlowElse(&node, extra)
-		case KeywordFor:
-			// e.loop(&node, extra)
+			e.controlFlowElse(&node, extra, frame)
 			continue
-
+		case KeywordFor:
+			e.loop(&node, extra, frame)
+			continue
 		default:
 			// 其他情况，继续处理
 		}
@@ -147,6 +148,7 @@ func (e *JTEngine) interativeParse(templateNode gjson.Result, entry string) any 
 			case node.IsObject():
 				// 是Object，需要继续解析
 				var subTarget map[string]any
+				// if isTopLevelFrame(frame) {
 				if frame.fieldName == entry {
 					// 如果是顶层节点，直接赋值给target
 					subTarget = frame.target.(map[string]any)
@@ -189,11 +191,12 @@ func (e *JTEngine) interativeParse(templateNode gjson.Result, entry string) any 
 	return result
 }
 
-func (e *JTEngine) setExpressionResult(frame *ParseFrame, entry string) {
-	if frame.fieldName == entry {
-		frame.target = e.replaceExpression(frame.result)
+func (e *JTEngine) setExpressionResult(frame *ParseFrame) {
+	result := e.replaceExpression(frame.result)
+	if e.isFrameAtTopLevel(frame) {
+		frame.target = result
 	} else {
-		frame.target.(map[string]any)[frame.fieldName] = e.replaceExpression(frame.result)
+		frame.target.(map[string]any)[frame.fieldName] = result
 	}
 }
 
@@ -288,6 +291,11 @@ func (e *JTEngine) checkBeforeRun() error {
 		return werror.ErrTargetIsNil
 	}
 	return nil
+}
+
+// isFrameAtTopLevel 判断当前帧是否在模板的顶层
+func (e *JTEngine) isFrameAtTopLevel(frame *ParseFrame) bool {
+	return frame.fieldName == e.entry
 }
 
 func flattenNode(node gjson.Result) *deque.Deque[*ds.Pair[gjson.Result, gjson.Result]] {

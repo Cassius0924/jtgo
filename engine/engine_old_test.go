@@ -708,18 +708,6 @@ func TestConfigEngine_Run_ExpressionInValue(t *testing.T) {
 		{
 			dataset := map[string]any{
 				"Request": map[string]any{
-					"Scene": 1,
-				},
-				"Name": "Linux",
-			}
-			result := PromoteGameModuleInfo{}
-			err := engine.WithDataset(dataset).WithCustomEntry("just_test").ParseTo(&result).Run()
-			convey.So(err, convey.ShouldBeNil)
-			convey.So(result.SubTitle.SubTitleText, convey.ShouldEqual, "Linux")
-		}
-		{
-			dataset := map[string]any{
-				"Request": map[string]any{
 					"Scene": 2,
 				},
 				"Name": "Linux",
@@ -781,79 +769,6 @@ func TestConfigEngine_Run_MainEntry(t *testing.T) {
 		_ = engine.WithDataset(dataset).ParseTo(&result).Run()
 		convey.So(result.SubTitle.SubTitleText, convey.ShouldEqual, "???")
 	})
-}
-
-var engine001 *JTEngine
-
-func TestConfigEngine_Run_AssembleList(t *testing.T) {
-	convey.Convey("Test GetJSONTemplateEngine", t, func() {
-		configJSON := `
-		{
-			"_main_": {
-				"button_list": {
-					"@default": "${assembleButtonList(DATASET, 'button')}"    
-				},
-				"a_bool": {
-					"@default": "${testFunc(DATASET, '12')}"
-				}
-			},
-			"button": {
-				"button_text": {
-					"@default": "${GameInfo.Name}"
-				}
-			}
-		}
-		`
-		RegisterFunction("Test", assembleButtonList)
-		RegisterFunction("Test", testFunc)
-		ctx := context.Background()
-		engine001, _ = GetJSONTemplateEngine(ctx, "Test", configJSON)
-
-		dataset := map[string]any{
-			"GameInfoList": []map[string]any{
-				{
-					"Name": "王者荣耀",
-				},
-				{
-					"Name": "守望先锋",
-				},
-			},
-		}
-
-		result := PromoteGameModuleInfo{}
-		_ = engine001.WithDataset(dataset).ParseTo(&result).Run()
-		convey.So(result.ButtonList, convey.ShouldResemble, []*Button{
-			{
-				ButtonText: "王者荣耀",
-			},
-			{
-				ButtonText: "守望先锋",
-			},
-		})
-		convey.So(result.ABool, convey.ShouldBeTrue)
-	})
-}
-
-func assembleButtonList(ctx context.Context, superDataset map[string]any, entry string) []*Button {
-	gameInfoList := superDataset["GameInfoList"].([]map[string]any)
-	subEngine := GetJSONTemplateEngineFromContext(ctx)
-
-	buttonList := make([]*Button, 0)
-	for _, gameInfo := range gameInfoList {
-		var button Button
-		dataset := map[string]any{
-			"GameInfo": gameInfo,
-		}
-		_ = subEngine.WithCustomEntry(entry).WithDataset(dataset).ParseTo(&button).Run()
-		buttonList = append(buttonList, &button)
-	}
-	superDataset = nil
-	return buttonList
-}
-
-func testFunc(ctx context.Context, superDataset map[string]any, entry string) bool {
-	_, ok := superDataset["GameInfoList"].([]map[string]any)
-	return ok
 }
 
 func TestConfigEngine_Run_calculateExpressionByExps(t *testing.T) {

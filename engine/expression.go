@@ -2,12 +2,12 @@ package engine
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"regexp"
 	"strings"
 
+	"github.com/cassius0924/jtgo/werror"
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
 	"github.com/samber/lo"
@@ -41,7 +41,7 @@ func (e *JTEngine) evaluateExpressionsInText(input string) any {
 		}
 
 		// 如果是只有一个表达式，且无其他字符的场景，直接替换，例如 "assembleGameModuleActivity(PromoteGame)" 计算函数值然后返回一个结构体
-		if len(exps) == 1 && fmt.Sprintf(expressionFormat, exps[0]) == strings.ReplaceAll(input, JSONTemplateEngineDatasetVariable, exprEnvVariable) {
+		if len(exps) == 1 && fmt.Sprintf(expressionFormat, exps[0]) == input {
 			return result
 		}
 
@@ -66,8 +66,6 @@ func extractExpression(input string) (string, bool) {
 		return result, false
 	}
 
-	// 将大写的DATASET 替换成 $env
-	result = strings.ReplaceAll(result, JSONTemplateEngineDatasetVariable, exprEnvVariable)
 	return result, true
 }
 
@@ -76,8 +74,7 @@ func extractAllExpression(input string) []string {
 	var result []string
 	for _, match := range matches {
 		if len(match) > 1 {
-			r := strings.ReplaceAll(match[1], JSONTemplateEngineDatasetVariable, exprEnvVariable)
-			result = append(result, r)
+			result = append(result, match[1])
 		}
 	}
 	return result
@@ -119,7 +116,7 @@ func (e *JTEngine) evaluateExpression(expression string) (any, error) {
 	program, ok := e.compiledExps[expression]
 	if !ok {
 		slog.ErrorContext(e.ctx, "[JsonTemplateEngine.evaluateExpression] compiledExps not found, please check code", "expression", expression)
-		return nil, errors.ErrUnsupported
+		return nil, werror.ErrCompiledExpressionNotFound
 	}
 	result, err := e.exprRun(program)
 	if err != nil {
@@ -144,9 +141,14 @@ func (e *JTEngine) evaluateExpressionToBool(expression string) (bool, error) {
 			isBoolResult = *boolPtr
 		} else {
 			slog.WarnContext(e.ctx, "[JsonTemplateEngine.recursiveParse] exprResult not bool, please check expression", "expression", expression, "result", result)
-			return false, errors.ErrUnsupported
+			return false, werror.ErrExpressionResultNotBool
 		}
 	}
+	//	isBoolResult, castErr := cast.ToBoolE(result)
+	// if castErr != nil {
+	// 	slog.WarnContext(e.ctx, "[JsonTemplateEngine.evaluateExpressionToBool] exprResult not bool, please check expression", "expression", expression, "result", result)
+	// 	return false, werror.ErrExpressionResultNotBool
+	// }
 	return isBoolResult, nil
 }
 

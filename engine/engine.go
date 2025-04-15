@@ -19,9 +19,6 @@ const (
 
 const (
 	defaultEntry = "_main_" // 默认入口标志
-
-	JSONTemplateEngineDatasetVariable = "DATASET" // 引擎数据集变量名
-	exprEnvVariable                   = "$env"    // expr Env变量名
 )
 
 var (
