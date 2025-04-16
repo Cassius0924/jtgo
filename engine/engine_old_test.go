@@ -28,11 +28,11 @@ type AObject struct {
 type AEnum int64
 
 type PromoteGameModuleInfo struct {
-	Title      string    `json:"title"`
+	Title      string      `json:"title"`
 	SubTitle   *SubTitle `json:"sub_title"`
-	Button     Button    `json:"button"`
-	IconURL    string    `json:"icon_url"`
-	ButtonList []*Button `json:"button_list"`
+	Button     Button      `json:"button"`
+	IconURL    string      `json:"icon_url"`
+	ButtonList []*Button   `json:"button_list"`
 
 	AString    string            `json:"a_string"`
 	PtrAString *string           `json:"ptr_a_string"`

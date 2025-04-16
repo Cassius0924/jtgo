@@ -171,17 +171,39 @@ func (e *JTEngine) varAssignment(node *gjson.Result) {
 	}
 }
 
-// controlFlowIf 处理IF控制流
-func (e *JTEngine) controlFlowIf(node *gjson.Result, extra string) {
+// judgeConditionalIf 处理if条件判断，返回是否命中该条件
+func (e *JTEngine) judgeConditionalIf(node *gjson.Result, expression string, frame *ParseFrame) bool {
+	// 表达式计算为bool值
+	matched, err := e.evaluateExpressionToBool(expression)
+	if err != nil {
+		e.err = err
+	}
+
+	if matched { // 表达式为true，替换值，并剪枝结束循环
+		frame.conditionalCtx.resultValue = node
+		frame.conditionalCtx.isMatched = true
+	}
+
+	slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.judgeConditionalIf](trace) condition evaluate result,\nkey = %s,\nvalue = %s,\nexpr = %s", frame.fieldName, node.String(), expression))
+	return matched
+}
+
+// judgeConditionalElif 处理elif条件判断，返回是否命中该条件
+func (e *JTEngine) judgeConditionalElif(node *gjson.Result, expression string, frame *ParseFrame) bool {
+	return e.judgeConditionalIf(node, expression, frame)
+}
+
+// judgeConditionalElse 处理else条件判断
+func (e *JTEngine) judgeConditionalElse(node *gjson.Result, extra string, frame *ParseFrame) bool {
+	return false
+}
+
+// executeLoop 处理for循环
+func (e *JTEngine) executeLoop(node *gjson.Result, extra string, frame *ParseFrame) {
 
 }
 
-// controlFlowElse 处理ELSE控制流
-func (e *JTEngine) controlFlowElse(node *gjson.Result, extra string) {
-
-}
-
-// controlFlowElse 处理ELSE控制流
-func (e *JTEngine) loop(node *gjson.Result, extra string) {
+// continueLoop 处理循环中的CONTINUE
+func (e *JTEngine) continueLoop(node *gjson.Result, extra string, frame *ParseFrame) {
 
 }

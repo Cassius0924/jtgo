@@ -37,7 +37,7 @@ func (e *JTEngine) keepStatusRun() error {
 	}
 
 	// 循环解析方法
-	finalTarget := e.interativeParse(entryTemplateNode, e.entry)
+	finalTarget := e.interativeParse(entryTemplateNode)
 
 	// 将config赋值给dest
 	err := sonic.UnmarshalString(util.SonicToString(finalTarget), e.target)
@@ -56,48 +56,42 @@ func (e *JTEngine) keepStatusRun() error {
 	return e.err
 }
 
-type ParseFrame struct {
-	node         gjson.Result
-	fieldName    string
-	target       any
-	curSubNode   *deque.DequeIterator[*ds.Pair[gjson.Result, gjson.Result]]
-	isMatchedRes bool
-	result       *gjson.Result
-}
-
 // interativeParse 迭代解析方法
-func (e *JTEngine) interativeParse(templateNode gjson.Result, entry string) any {
+func (e *JTEngine) interativeParse(templateNode gjson.Result) any {
 	var (
-		stack  = ds.NewStack[*ParseFrame]()
-		result any
+		frameStack = ds.NewStack[*ParseFrame]()
+		result     any
 	)
 	// 初始化栈
-	stack.Push(&ParseFrame{
-		node:         templateNode,
-		fieldName:    entry,
-		target:       make(map[string]any),
-		curSubNode:   flattenNode(templateNode).First(),
-		isMatchedRes: false,
+	frameStack.Push(&ParseFrame{
+		node:       templateNode,
+		fieldName:  e.entry,
+		target:     make(map[string]any),
+		curSubNode: flattenNode(templateNode).First(),
+		conditionalCtx: &ConditionalContext{
+			isMatched: false,
+		},
 	})
 
 	// 迭代解析
-	for stack.Size() > 0 {
+	for frameStack.Size() > 0 {
 		var (
-			frame       = stack.Top() // 获取栈顶帧
-			field, node gjson.Result
+			frame                 = frameStack.Top() // 获取栈顶帧
+			subNodeField, subNode gjson.Result
 		)
 
 		// 如果子节点迭代器无效，或匹配到了值，说明当前帧的子节点已经遍历完毕，弹出栈顶元素
-		if !frame.curSubNode.IsValid() || frame.isMatchedRes {
-			stack.Pop()
+		if !frame.curSubNode.IsValid() || frame.conditionalCtx.isMatched {
+			frameStack.Pop()
 
-			if frame.result != nil {
-				e.setExpressionResult(frame)
-				slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.interativeParse](trace) using value,\nkey = %s,\nvalue = %s", frame.fieldName, frame.result.String()))
-			}
+			// TODO: 封装成 judgeConditionalIf 类似的函数，例如叫做 setConditionalResult
+			// if frame.conditionalCtx.resultValue != nil {
+			// 	e.setExpressionResult(frame)
+			// 	slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.interativeParse](trace) using value,\nkey = %s,\nvalue = %s", frame.fieldName, frame.conditionalCtx.resultValue.String()))
+			// }
 
 			// 如果栈为空，说明所有帧都已经遍历完毕，返回结果
-			if stack.Size() == 0 {
+			if frameStack.Size() == 0 {
 				result = frame.target
 				break
 			}
@@ -105,86 +99,90 @@ func (e *JTEngine) interativeParse(templateNode gjson.Result, entry string) any 
 		}
 
 		// 取出当前值后，继续遍历，迭代器指向下一个元素
-		pair := frame.curSubNode.Value()
-		field, node = pair.First, pair.Second
+		subNodePair := frame.curSubNode.Value()
+		subNodeField, subNode = subNodePair.First, subNodePair.Second
 		frame.curSubNode.Next()
 
-		// TODO: 这里是否需要？
-		// if !node.Exists() {
-		// 	continue
-		// }
+		subNodeFieldName := normalizeFieldName(subNodeField.String())
 
-		fieldName := normalizeFieldName(field.String())
-
-		switch keyword, _ := detectKeyword(fieldName); keyword {
+		switch keyword, extra := detectKeyword(subNodeFieldName); keyword {
 		case KeywordDo:
-			e.doOperations(&node)
+			e.doOperations(&subNode)
 			continue
 		case KeywordVar:
-			e.varAssignment(&node)
+			e.varAssignment(&subNode)
 			continue
 		case KeywordDefault:
-			if !frame.isMatchedRes {
-				frame.result = &node // 记录下默认值
+			if !frame.conditionalCtx.isMatched {
+				frame.conditionalCtx.resultValue = &subNode // 记录下默认值
 			}
 			continue
 		case KeywordIf:
-			// 与if、else和for都当前帧相关，需要传入当前帧
-			// e.controlFlowIf(&node, extra, frame)
-			continue
+			// if、elif、else和for都与当前帧相关，需要传入当前帧用以记录相关上下文
+			// if、elif和else的extra都是条件表达式
+			matched := e.judgeConditionalIf(&subNode, extra, frame)
+			// 如果未命中当前条件，则需要继续尝试下一个条件
+			if !matched {
+				continue
+			}
+		case KeywordElif:
+			matched := e.judgeConditionalElif(&subNode, extra, frame)
+			if !matched {
+				continue
+			}
 		case KeywordElse:
-			// e.controlFlowElse(&node, extra, frame)
-			continue
+			e.judgeConditionalElse(&subNode, extra, frame)
 		case KeywordFor:
-			// e.loop(&node, extra, frame)
+			e.executeLoop(&subNode, extra, frame)
+			continue
+		case KeywordContinue:
+			e.continueLoop(&subNode, extra, frame)
 			continue
 		default:
 			// 其他情况，继续处理
 		}
 
-		expression, isExpression := extractExpression(fieldName)
-		if !isExpression { // 不是表达式
-			switch {
-			case node.IsObject():
-				// 是Object，需要继续解析
-				var subTarget map[string]any
-				// if isTopLevelFrame(frame) {
-				if frame.fieldName == entry {
-					// 如果是顶层节点，直接赋值给target
-					subTarget = frame.target.(map[string]any)
-				} else {
-					// 不是顶层节点，赋值给当前帧的target
-					frame.target.(map[string]any)[frame.fieldName] = make(map[string]any)
-					subTarget = frame.target.(map[string]any)[frame.fieldName].(map[string]any)
-				}
+		switch {
+		case subNode.IsObject():
+			// 是Object，需要继续解析，将解析帧压入栈中
+			var (
+				target    any
+				fieldName string
+			)
 
-				stack.Push(&ParseFrame{
-					node:         node,
-					fieldName:    fieldName,
-					target:       subTarget,
-					curSubNode:   flattenNode(node).First(),
-					isMatchedRes: false,
-				})
-				continue
-			default:
-				// 其他类型直接赋值
-				frame.target.(map[string]any)[fieldName] = e.replaceExpression(&node)
-				slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.interativeParse](trace) using default value,\nkey = %s,\nvalue = %s", frame.fieldName, node.String()))
-				continue
+			if e.isFrameAtTopLevel(frame) {
+				// 如果是顶层节点，直接赋值给target，fieldName为正常的子节点fieldName
+				target = frame.target
+				fieldName = subNodeFieldName
+			} else if frame.isConditionalMatched() {
+				// 如果是条件匹配，fieldName应该为当前帧的fieldName，因为子节点fieldName是关键词+条件表达式
+				target = frame.target
+				fieldName = frame.fieldName
+			} else {
+				// 不是顶层节点，赋值给当前帧的target
+				frame.target.(map[string]any)[frame.fieldName] = make(map[string]any)
+				target = frame.target.(map[string]any)[frame.fieldName]
+				fieldName = subNodeFieldName
 			}
-		}
 
-		// 是表达式
-		isTrue, err := e.evaluateExpressionToBool(expression)
-		if err != nil {
-			e.err = err
+			frameStack.Push(&ParseFrame{
+				node:       subNode,
+				fieldName:  fieldName,
+				target:     target,
+				curSubNode: flattenNode(subNode).First(),
+				conditionalCtx: &ConditionalContext{
+					isMatched: false,
+				},
+			})
 			continue
-		}
-
-		if isTrue { // 表达式为true，替换值，并剪枝结束循环
-			frame.result = &node
-			frame.isMatchedRes = true
-			slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.recursiveParse](trace) using matched value,\nkey = %s,\nvalue = %s,\nexpr = %s", frame.fieldName, node.String(), expression))
+		default:
+			// 其他类型直接赋值
+			if frame.isConditionalMatched() {
+				frame.target.(map[string]any)[frame.fieldName] = e.replaceExpression(&subNode)
+			} else {
+				frame.target.(map[string]any)[subNodeFieldName] = e.replaceExpression(&subNode)
+			}
+			continue
 		}
 	}
 
@@ -192,93 +190,13 @@ func (e *JTEngine) interativeParse(templateNode gjson.Result, entry string) any 
 }
 
 func (e *JTEngine) setExpressionResult(frame *ParseFrame) {
-	result := e.replaceExpression(frame.result)
+	result := e.replaceExpression(frame.conditionalCtx.resultValue)
 	if e.isFrameAtTopLevel(frame) {
 		frame.target = result
 	} else {
 		frame.target.(map[string]any)[frame.fieldName] = result
 	}
 }
-
-// recursiveParse 输入 templateNode 根据 e.dataset 最后解析到 target 中
-// func (e *JTEngine) recursiveParse(templateNode gjson.Result, target map[string]any, keyName string) (any, bool) {
-// 	var (
-// 		res, defaultRes *gjson.Result
-// 		isMatch         bool
-// 		matchedExpr     string
-// 	)
-
-// 	templateNode.ForEach(func(field, node gjson.Result) bool {
-// 		if !node.Exists() {
-// 			return true
-// 		}
-
-// 		fieldName := normalizeFieldName(field.String())
-
-// 		// fieldName 有五种情况：1. DEFAULT 2. VAR 3. DO 4. 普通字符串 5. 表达式
-// 		switch detectKeyword(fieldName) {
-// 		case KeywordDo:
-// 			// 是 DO 关键词，需要执行操作
-// 			e.doOperations(&node)
-// 			return true
-// 		case KeywordVar:
-// 			// 是 VAR 关键词，需要进行变量赋值
-// 			e.varAssignment(&node)
-// 			return true
-// 		case KeywordDefault:
-// 			// 是默认值DEFAULT
-// 			defaultRes = &node // 记录下默认值
-// 			return true
-// 		default:
-// 			// 其他情况，继续处理
-// 		}
-
-// 		expression, isExpression := extractExpression(fieldName)
-// 		// 是普通字符串
-// 		if !isExpression { // 不是表达式
-// 			switch {
-// 			case node.IsObject():
-// 				// 是Object，需要继续递归解析
-// 				target[fieldName] = make(map[string]any)
-// 				subTarget := target[fieldName].(map[string]any)
-// 				// 递归解析
-// 				result, hasResult := e.recursiveParse(node, subTarget, fieldName)
-// 				if hasResult {
-// 					target[fieldName] = result
-// 				}
-// 				return true
-// 			default:
-// 				// 其他类型直接赋值
-// 				target[fieldName] = e.replaceExpression(&node)
-// 				slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.recursiveParse](trace) using default value,\nkey = %s,\nvalue = %s", fieldName, node.String()))
-// 				return true
-// 			}
-// 		}
-
-// 		isBoolResult, err := e.evaluateExpressionToBool(expression)
-// 		if err != nil {
-// 			e.err = err
-// 			return true
-// 		}
-
-// 		if isBoolResult { // 表达式为true，替换值，并剪枝结束循环
-// 			res = &node
-// 			isMatch = true
-// 			return false
-// 		}
-// 		return true
-// 	})
-
-// 	// 遍历完毕，解析匹配到的值
-// 	if isMatch {
-// 		slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.recursiveParse](trace) using matched value,\nkey = %s,\nvalue = %s,\nexpr = %s", keyName, res.String(), matchedExpr))
-// 		return e.replaceExpression(res), true
-// 	} else if defaultRes != nil { // 没有匹配到值，使用DEFAULT默认值兜底
-// 		slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.recursiveParse](trace) using default value,\nkey = %s,\nvalue = %s,\nexpr = ${DEFAULT},", keyName, defaultRes.String()))
-// 		return e.replaceExpression(defaultRes), true
-// 	}
-// 	return nil, false
-// }
 
 // checkBeforeRun 检查是否有必要的参数
 func (e *JTEngine) checkBeforeRun() error {

@@ -1,18 +1,24 @@
 package engine
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/samber/lo"
+)
 
 type Keyword string
 
 const (
 	// 关键词，全小写
-	KeywordDefault Keyword = "@default"
-	KeywordDo      Keyword = "@do"
-	KeywordReturn  Keyword = "@return"
-	KeywordVar     Keyword = "@var"
-	KeywordFor     Keyword = "@for"
-	KeywordIf      Keyword = "@if"
-	KeywordElse    Keyword = "@else"
+	KeywordDefault  Keyword = "@default"
+	KeywordDo       Keyword = "@do"
+	KeywordReturn   Keyword = "@return"
+	KeywordVar      Keyword = "@var"
+	KeywordFor      Keyword = "@for"
+	KeywordIf       Keyword = "@if"
+	KeywordElif     Keyword = "@elif"
+	KeywordElse     Keyword = "@else"
+	KeywordContinue Keyword = "@continue"
 )
 
 var (
@@ -24,7 +30,9 @@ var (
 		KeywordVar,
 		KeywordFor,
 		KeywordIf,
+		KeywordElif,
 		KeywordElse,
+		KeywordContinue,
 	}
 )
 
@@ -33,9 +41,9 @@ func detectKeyword(input string) (Keyword, string) {
 	// 不区分大小写
 	input = strings.ToLower(strings.TrimSpace(input))
 	for _, kw := range Keywords {
-		extra, ok := strings.CutPrefix(input, string(kw))
+		extra, ok := strings.CutPrefix(input, string(kw)+" ")
 		if ok {
-			return kw, extra
+			return kw, strings.TrimSpace(extra)
 		}
 	}
 	return "", ""
@@ -60,10 +68,19 @@ func IsKeywordDefault(input string) bool {
 func IsKeywordFor(input string) bool {
 	return strings.ToLower(input) == string(KeywordFor)
 }
+
 func IsKeywordIf(input string) bool {
 	return strings.ToLower(input) == string(KeywordIf)
 }
 
+func IsKeywordElif(input string) bool {
+	return strings.ToLower(input) == string(KeywordElif)
+}
+
 func IsKeywordElse(input string) bool {
 	return strings.ToLower(input) == string(KeywordElse)
+}
+
+func IsAnyKeyword(input string) bool {
+	return lo.Contains(Keywords, Keyword(strings.ToLower(input)))
 }

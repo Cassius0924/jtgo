@@ -30,16 +30,18 @@ func (e *JTEngine) recursivePreCompile(configResult gjson.Result) {
 
 		fieldName := normalizeFieldName(field.String())
 		// 去掉${}符号，提取表达式
-		expression, isExpression := extractExpression(fieldName)
+		// expression, isExpression := extractExpression(fieldName)
+		keyword, extra := detectKeyword(fieldName)
+		isExpression := keyword != ""
 
 		// 这里预编译，是表达式并且未被编译过
-		if isExpression && e.compiledExps[expression] == nil && !IsKeywordDefault(expression) {
+		if isExpression && e.compiledExps[extra] == nil {
 			// 编译表达式，然后缓存进compiledExps
-			program, err := e.exprCompileAsBool(expression)
+			program, err := e.exprCompileAsBool(extra)
 			if err != nil { // 说明expression不是以bool为最终值的表达式
-				slog.ErrorContext(e.ctx, "[JsonTemplateEngine.recursivePreCompile] expr.Compile err", "field", fieldName, "expression", expression, "error", err)
+				slog.ErrorContext(e.ctx, "[JsonTemplateEngine.recursivePreCompile] expr.Compile err", "field", fieldName, "expression", extra, "error", err)
 			} else {
-				e.compiledExps[expression] = program
+				e.compiledExps[extra] = program
 			}
 		}
 
