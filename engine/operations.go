@@ -179,11 +179,14 @@ func (e *JTEngine) judgeConditionalIf(node *gjson.Result, expression string, fra
 		e.err = err
 	}
 
-	if matched { // 表达式为true，替换值，并剪枝结束循环
+	// 表达式为true，替换值，并剪枝结束循环
+	if matched {
 		frame.conditionalCtx.resultValue = node
 		frame.conditionalCtx.isMatched = true
 	}
 
+	// 自增条件组序号
+	frame.conditionalCtx.groupNum.Inc()
 	slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.judgeConditionalIf](trace) condition evaluate result,\nkey = %s,\nvalue = %s,\nexpr = %s", frame.fieldName, node.String(), expression))
 	return matched
 }
@@ -194,8 +197,20 @@ func (e *JTEngine) judgeConditionalElif(node *gjson.Result, expression string, f
 }
 
 // judgeConditionalElse 处理else条件判断
-func (e *JTEngine) judgeConditionalElse(node *gjson.Result, extra string, frame *ParseFrame) bool {
-	return false
+func (e *JTEngine) judgeConditionalElse(node *gjson.Result, frame *ParseFrame) bool {
+	// 判断当前 else 是否是孤儿else，即当前 else 是否属于某一个 if
+	// TODO: 封装成函数
+	if frame.conditionalCtx.groupNum.Value() == 0 {
+		// 是孤儿 else 则视为 false
+		slog.WarnContext(e.ctx, "[JSONTemplateEngine.judgeConditionalElse] this else is orphan, please check whether the else belongs to an if!", "key", frame.fieldName)
+		return false
+	}
+
+	frame.conditionalCtx.resultValue = node
+	frame.conditionalCtx.isMatched = true
+
+	slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.judgeConditionalIf](trace) condition evaluate result,\nkey = %s,\nvalue = %s", frame.fieldName, node.String()))
+	return true
 }
 
 // executeLoop 处理for循环

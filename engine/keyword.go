@@ -41,8 +41,8 @@ func detectKeyword(input string) (Keyword, string) {
 	// 不区分大小写
 	input = strings.ToLower(strings.TrimSpace(input))
 	for _, kw := range Keywords {
-		extra, ok := strings.CutPrefix(input, string(kw)+" ")
-		if ok {
+		extra, found := strings.CutPrefix(input, string(kw))
+		if found {
 			return kw, strings.TrimSpace(extra)
 		}
 	}

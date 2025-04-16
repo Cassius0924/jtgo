@@ -13,8 +13,6 @@ type ParseFrame struct {
 	target     any
 	curSubNode *deque.DequeIterator[*ds.Pair[gjson.Result, gjson.Result]]
 
-	// isMatchedRes   bool
-	// result         *gjson.Result
 	conditionalCtx *ConditionalContext
 	loopCtx        *LoopContext
 }
@@ -30,7 +28,7 @@ func (f *ParseFrame) isConditionalMatched() bool {
 type ConditionalContext struct {
 	resultValue *gjson.Result
 	isMatched   bool
-	
+	groupNum    *ds.Counter // 当前条件组的序号
 }
 
 // LoopContext 循环上下文

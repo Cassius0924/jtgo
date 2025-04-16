@@ -148,3 +148,64 @@ func TestEngine_ConditionalElif(t *testing.T) {
 		convey.So(target.Name, convey.ShouldEqual, "hello")
 	})
 }
+
+func TestEngine_ConditionalElifNested(t *testing.T) {
+	convey.Convey("TestEngine_ConditionalElifNested", t, func() {
+		tmpl := `
+{
+	"_main_": {
+		"name": {
+			"@if a": "nothing",
+			"wrong": "something",
+			"@elif b": {
+				"wrong": "something",
+				"@if c": "hello"
+			},
+			"wrong": "something"
+		}
+	}
+}
+	`
+		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_ConditionalElifNested", tmpl)
+		convey.So(err, convey.ShouldBeNil)
+
+		dataset := map[string]any{
+			"a": false,
+			"b": true,
+			"c": true,
+		}
+
+		target := &TestObj{}
+		_ = engine.WithDataset(dataset).ParseTo(target).Run()
+
+		convey.So(target.Name, convey.ShouldEqual, "hello")
+	})
+}
+
+func TestEngine_ConditionalElse(t *testing.T) {
+	convey.Convey("TestEngine_ConditionalElse", t, func() {
+		tmpl := `
+{
+	"_main_": {
+		"name": {
+			"@else": "nothing",
+			"@if a": "nothing",
+			"@else": "hello"
+			"@if true": "nothing",
+		}
+	}
+}
+	`
+		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_ConditionalElse", tmpl)
+		convey.So(err, convey.ShouldBeNil)
+
+		dataset := map[string]any{
+			"a": false,
+		}
+
+		target := &TestObj{}
+		_ = engine.WithDataset(dataset).ParseTo(target).Run()
+
+		convey.So(target.Name, convey.ShouldEqual, "hello")
+	})
+}

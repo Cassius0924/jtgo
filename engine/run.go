@@ -70,6 +70,7 @@ func (e *JTEngine) interativeParse(templateNode gjson.Result) any {
 		curSubNode: flattenNode(templateNode).First(),
 		conditionalCtx: &ConditionalContext{
 			isMatched: false,
+			groupNum:  ds.NewCounter(0),
 		},
 	})
 
@@ -131,7 +132,10 @@ func (e *JTEngine) interativeParse(templateNode gjson.Result) any {
 				continue
 			}
 		case KeywordElse:
-			e.judgeConditionalElse(&subNode, extra, frame)
+			matched := e.judgeConditionalElse(&subNode, frame)
+			if !matched {
+				continue
+			}
 		case KeywordFor:
 			e.executeLoop(&subNode, extra, frame)
 			continue
@@ -172,6 +176,7 @@ func (e *JTEngine) interativeParse(templateNode gjson.Result) any {
 				curSubNode: flattenNode(subNode).First(),
 				conditionalCtx: &ConditionalContext{
 					isMatched: false,
+					groupNum:  ds.NewCounter(0),
 				},
 			})
 			continue
