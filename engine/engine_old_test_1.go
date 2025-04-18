@@ -171,7 +171,7 @@ func TestConfigEngine_Run_CustomFunction(t *testing.T) {
 
 		engine2, _ := GetJSONTemplateEngine(context.Background(), "test_custom_function", configJSON)
 		result2 := PromoteGameModuleInfo{}
-		err2 := engine2.WithDataset(dataset1).WithCustomEntry("promote_game_module_info").ParseTo(&result2).Run()
+		_,err2 := engine2.WithDataset(dataset1).WithCustomEntry("promote_game_module_info").ParseTo(&result2).Run()
 		convey.So(err2, convey.ShouldBeNil)
 		convey.So(result2.SubTitle.SubTitleText, convey.ShouldEqual, "近期直播内容")
 
@@ -235,7 +235,7 @@ func TestConfigEngine_Run_Default(t *testing.T) {
 			},
 		}
 		result1 := PromoteGameModuleInfo{}
-		err1 := engine.WithDataset(dataset1).WithCustomEntry("promote_game_module_info").ParseTo(&result1).Run()
+		_,err1 := engine.WithDataset(dataset1).WithCustomEntry("promote_game_module_info").ParseTo(&result1).Run()
 		convey.So(err1, convey.ShouldBeNil)
 		convey.So(result1.SubTitle.SubTitleText, convey.ShouldEqual, "近期内容")
 
@@ -247,7 +247,7 @@ func TestConfigEngine_Run_Default(t *testing.T) {
 			},
 		}
 		result2 := PromoteGameModuleInfo{}
-		err2 := engine.WithDataset(dataset2).WithCustomEntry("promote_game_module_info").ParseTo(&result2).Run()
+		_,err2 := engine.WithDataset(dataset2).WithCustomEntry("promote_game_module_info").ParseTo(&result2).Run()
 		convey.So(err2, convey.ShouldBeNil)
 		convey.So(result2.SubTitle.SubTitleText, convey.ShouldEqual, "近期直播内容")
 		configJSON = `
@@ -267,7 +267,7 @@ func TestConfigEngine_Run_Default(t *testing.T) {
 		`
 		engine3, _ := GetJSONTemplateEngine(context.Background(), time.Now().String(), configJSON)
 		result3 := PromoteGameModuleInfo{}
-		err3 := engine3.WithDataset(dataset2).WithCustomEntry("promote_game_module_info").ParseTo(&result3).Run()
+		_,err3 := engine3.WithDataset(dataset2).WithCustomEntry("promote_game_module_info").ParseTo(&result3).Run()
 		convey.So(err3, convey.ShouldBeNil)
 		convey.So(result3.SubTitle.SubTitleText, convey.ShouldEqual, "近期直播内容")
 	})
@@ -305,7 +305,7 @@ func TestConfigEngine_Run_ReplaceVariable(t *testing.T) {
 			},
 		}
 		result1 := PromoteGameModuleInfo{}
-		err1 := engine.WithDataset(dataset1).WithCustomEntry("promote_game_module_info").ParseTo(&result1).Run()
+		_,err1 := engine.WithDataset(dataset1).WithCustomEntry("promote_game_module_info").ParseTo(&result1).Run()
 		convey.So(err1, convey.ShouldBeNil)
 		convey.So(result1.SubTitle.SubTitleText, convey.ShouldEqual, "副标题")
 		convey.So(result1.IconURL, convey.ShouldEqual, "https://www.bytedance.com")
@@ -340,12 +340,12 @@ func TestConfigEngine_Run_MultiModule(t *testing.T) {
 			},
 		}
 		result1 := PromoteGameModuleInfo{}
-		err1 := engine.WithDataset(dataset1).WithCustomEntry("promote_game_module_info").ParseTo(&result1).Run()
+		_,err1 := engine.WithDataset(dataset1).WithCustomEntry("promote_game_module_info").ParseTo(&result1).Run()
 		convey.So(err1, convey.ShouldBeNil)
 		convey.So(result1.IconURL, convey.ShouldEqual, "https://www.bytedance.com")
 
 		result2 := PromoteGameModuleInfo{}
-		err2 := engine.WithDataset(dataset1).WithCustomEntry("other_module").ParseTo(&result2).Run()
+		_,err2 := engine.WithDataset(dataset1).WithCustomEntry("other_module").ParseTo(&result2).Run()
 		convey.So(err2, convey.ShouldBeNil)
 		convey.So(result2.Title, convey.ShouldEqual, "这是王者荣耀游戏")
 	})
@@ -373,21 +373,21 @@ func TestConfigEngine_Run_InvalidParams(t *testing.T) {
 			},
 		}
 		result1 := PromoteGameModuleInfo{}
-		err1 := engine.WithDataset(dataset1).WithCustomEntry("other_module").ParseTo(&result1).Run()
+		_,err1 := engine.WithDataset(dataset1).WithCustomEntry("other_module").ParseTo(&result1).Run()
 		convey.So(err1, convey.ShouldBeError)
 
 		// === 测试参数校验
 		result2 := PromoteGameModuleInfo{}
-		err2 := engine.WithCustomEntry("promote_game_module_info").ParseTo(&result2).Run()
+		_,err2 := engine.WithCustomEntry("promote_game_module_info").ParseTo(&result2).Run()
 		convey.So(err2, convey.ShouldBeNil)
-		err3 := engine.WithDataset(dataset1).ParseTo(&result2).Run()
+		_,err3 := engine.WithDataset(dataset1).ParseTo(&result2).Run()
 		convey.So(err3, convey.ShouldBeError)
-		err4 := engine.WithDataset(dataset1).WithCustomEntry("promote_game_module_info").Run()
+		_,err4 := engine.WithDataset(dataset1).WithCustomEntry("promote_game_module_info").Run()
 		convey.So(err4, convey.ShouldBeError)
 
 		// === 测试非法的 destination
 		result3 := 1
-		err5 := engine.WithDataset(dataset1).WithCustomEntry("promote_game_module_info").ParseTo(&result3).Run()
+		_,err5 := engine.WithDataset(dataset1).WithCustomEntry("promote_game_module_info").ParseTo(&result3).Run()
 		convey.So(err5, convey.ShouldBeError)
 	})
 }
@@ -427,7 +427,7 @@ func TestConfigEngine_Run_BaseType(t *testing.T) {
 		engine, _ := GetJSONTemplateEngine(context.Background(), time.Now().String(), configJSON)
 
 		result := PromoteGameModuleInfo{}
-		err := engine.WithDataset(nil).WithCustomEntry("promote_game_module_info").ParseTo(&result).Run()
+		_,err := engine.WithDataset(nil).WithCustomEntry("promote_game_module_info").ParseTo(&result).Run()
 		convey.So(err, convey.ShouldBeNil)
 		convey.So(result.AString, convey.ShouldEqual, "string")
 		convey.So(*result.PtrAString, convey.ShouldEqual, "ptr_string")
@@ -461,7 +461,7 @@ func TestConfigEngine_Run_StructType(t *testing.T) {
 		engine, _ := GetJSONTemplateEngine(context.Background(), time.Now().String(), configJSON)
 
 		result := PromoteGameModuleInfo{}
-		err := engine.WithDataset(nil).WithCustomEntry("promote_game_module_info").ParseTo(&result).Run()
+		_,err := engine.WithDataset(nil).WithCustomEntry("promote_game_module_info").ParseTo(&result).Run()
 		convey.So(err, convey.ShouldBeNil)
 		convey.So(result.AObject.Name, convey.ShouldEqual, "object")
 		convey.So(result.PtrAObject.Name, convey.ShouldEqual, "ptr_object")
@@ -482,7 +482,7 @@ func TestConfigEngine_Run_ArrayType(t *testing.T) {
 		engine, _ := GetJSONTemplateEngine(context.Background(), time.Now().String(), configJSON)
 
 		result := PromoteGameModuleInfo{}
-		err := engine.WithDataset(nil).WithCustomEntry("promote_game_module_info").ParseTo(&result).Run()
+		_,err := engine.WithDataset(nil).WithCustomEntry("promote_game_module_info").ParseTo(&result).Run()
 		convey.So(err, convey.ShouldBeNil)
 		convey.So(result.AArray, convey.ShouldResemble, []int{1, 2, 3, 4})
 	})
@@ -504,7 +504,7 @@ func TestConfigEngine_Run_MapType(t *testing.T) {
 		engine, _ := GetJSONTemplateEngine(context.Background(), time.Now().String(), configJSON)
 
 		result := PromoteGameModuleInfo{}
-		err := engine.WithDataset(nil).WithCustomEntry("promote_game_module_info").ParseTo(&result).Run()
+		_,err := engine.WithDataset(nil).WithCustomEntry("promote_game_module_info").ParseTo(&result).Run()
 		convey.So(err, convey.ShouldBeNil)
 		convey.So(result.AMap, convey.ShouldResemble, map[string]string{"key": "value"})
 	})
@@ -527,7 +527,7 @@ func TestConfigEngine_Run_Enum(t *testing.T) {
 		engine, _ := GetJSONTemplateEngine(context.Background(), time.Now().String(), configJSON)
 
 		result := PromoteGameModuleInfo{}
-		err := engine.WithDataset(nil).WithCustomEntry("promote_game_module_info").ParseTo(&result).Run()
+		_,err := engine.WithDataset(nil).WithCustomEntry("promote_game_module_info").ParseTo(&result).Run()
 		convey.So(err, convey.ShouldBeNil)
 		convey.So(result.AEnum, convey.ShouldEqual, AEnum(1))
 		convey.So(*result.PtrAEnum, convey.ShouldEqual, AEnum(2))
@@ -581,7 +581,7 @@ func TestConfigEngine_Run_Expression(t *testing.T) {
 			},
 			IconURL: "https://www.bytedance.com",
 		}
-		err1 := engine.WithDataset(dataset1).WithCustomEntry("promote_game_module_info").ParseTo(&result1).Run()
+		_,err1 := engine.WithDataset(dataset1).WithCustomEntry("promote_game_module_info").ParseTo(&result1).Run()
 		convey.So(err1, convey.ShouldBeNil)
 		convey.So(result1.SubTitle, convey.ShouldBeNil)
 		convey.So(result1.IconURL, convey.ShouldEqual, "https://www.bytedance.com")
@@ -598,7 +598,7 @@ func TestConfigEngine_Run_Expression(t *testing.T) {
 				SubTitleText: "测试测试",
 			},
 		}
-		err2 := engine.WithDataset(dataset2).WithCustomEntry("promote_game_module_info").ParseTo(&result2).Run()
+		_,err2 := engine.WithDataset(dataset2).WithCustomEntry("promote_game_module_info").ParseTo(&result2).Run()
 		convey.So(err2, convey.ShouldBeNil)
 		convey.So(result2.SubTitle.SubTitleText, convey.ShouldEqual, "测试测试")
 		convey.So(result2.Button.ButtonText, convey.ShouldEqual, "添加")
@@ -610,7 +610,7 @@ func TestConfigEngine_Run_Expression(t *testing.T) {
 			},
 		}
 		result3 := PromoteGameModuleInfo{}
-		err3 := engine.WithDataset(dataset3).WithCustomEntry("promote_game_module_info").ParseTo(&result3).Run()
+		_,err3 := engine.WithDataset(dataset3).WithCustomEntry("promote_game_module_info").ParseTo(&result3).Run()
 		convey.So(err3, convey.ShouldBeNil)
 		convey.So(result3.SubTitle.SubTitleText, convey.ShouldEqual, "近期直播内容")
 		convey.So(result3.Button.ButtonText, convey.ShouldEqual, "已添加")
@@ -641,7 +641,7 @@ func TestConfigEngine_Run_WrongExpression(t *testing.T) {
 			},
 		}
 		result1 := PromoteGameModuleInfo{}
-		err1 := engine.WithDataset(dataset1).WithCustomEntry("promote_game_module_info").ParseTo(&result1).Run()
+		_,err1 := engine.WithDataset(dataset1).WithCustomEntry("promote_game_module_info").ParseTo(&result1).Run()
 		convey.So(err1, convey.ShouldBeError)
 	})
 }
@@ -669,7 +669,7 @@ func TestConfigEngine_Run_WrongDataset(t *testing.T) {
 			"Name": "守望先锋",
 		}
 		result1 := PromoteGameModuleInfo{}
-		err1 := engine.WithDataset(dataset1).WithCustomEntry("promote_game_module_info").ParseTo(&result1).Run()
+		_,err1 := engine.WithDataset(dataset1).WithCustomEntry("promote_game_module_info").ParseTo(&result1).Run()
 		convey.So(err1, convey.ShouldBeNil)
 		convey.So(result1.SubTitle.SubTitleText, convey.ShouldEqual, "游戏名为")
 
@@ -677,7 +677,7 @@ func TestConfigEngine_Run_WrongDataset(t *testing.T) {
 			"Request": nil,
 		}
 		result2 := PromoteGameModuleInfo{}
-		err2 := engine.WithDataset(dataset2).WithCustomEntry("promote_game_module_info").ParseTo(&result2).Run()
+		_,err2 := engine.WithDataset(dataset2).WithCustomEntry("promote_game_module_info").ParseTo(&result2).Run()
 		convey.So(err2, convey.ShouldBeNil)
 	})
 }
@@ -714,7 +714,7 @@ func TestConfigEngine_Run_ExpressionInValue(t *testing.T) {
 				"Echo": "HaHa",
 			}
 			result := PromoteGameModuleInfo{}
-			err := engine.WithDataset(dataset).WithCustomEntry("just_test").ParseTo(&result).Run()
+			_,err := engine.WithDataset(dataset).WithCustomEntry("just_test").ParseTo(&result).Run()
 			convey.So(err, convey.ShouldBeNil)
 			convey.So(result.SubTitle.SubTitleText, convey.ShouldEqual, "你好HaHa，测试不存在字段：，测试不存在函数：，测试List：，测试Object：，测试Bool：true，测试Int：1，测试String：this is string")
 		}
@@ -766,7 +766,7 @@ func TestConfigEngine_Run_MainEntry(t *testing.T) {
 		dataset := map[string]any{}
 
 		result := PromoteGameModuleInfo{}
-		_ = engine.WithDataset(dataset).ParseTo(&result).Run()
+		_,_ = engine.WithDataset(dataset).ParseTo(&result).Run()
 		convey.So(result.SubTitle.SubTitleText, convey.ShouldEqual, "???")
 	})
 }
@@ -790,7 +790,7 @@ func TestConfigEngine_Run_calculateExpressionByExps(t *testing.T) {
 
 		result := PromoteGameModuleInfo{}
 		engine, _ := GetJSONTemplateEngine(context.Background(), "Test", configJSON)
-		_ = engine.ParseTo(&result).Run()
+		_,_ = engine.ParseTo(&result).Run()
 		convey.So(result.Title, convey.ShouldEqual, "123 + 123.1 + true + abc")
 	})
 }
@@ -825,7 +825,7 @@ func TestConfigEngine_Run_BuiltInDate(t *testing.T) {
 
 		result := PromoteGameModuleInfo{}
 		engine, _ := GetJSONTemplateEngine(context.Background(), "Test", configJSON)
-		_ = engine.ParseTo(&result).Run()
+		_,_ = engine.ParseTo(&result).Run()
 		convey.So(result.Title, convey.ShouldEqual, time.Now().Format("2006"))
 	})
 }
@@ -865,7 +865,7 @@ func TestConfigEngine_Run_BoolPtrDataset(t *testing.T) {
 
 			result := PromoteGameModuleInfo{}
 			engine, _ := GetJSONTemplateEngine(context.Background(), "BoolPtrDataset", configJSON)
-			_ = engine.WithDataset(env).ParseTo(&result).Run()
+			_,_ = engine.WithDataset(env).ParseTo(&result).Run()
 			convey.So(result.IconURL, convey.ShouldEqual, "http")
 			convey.So(result.Title, convey.ShouldEqual, "123")
 			convey.So(result.SubTitle.SubTitleText, convey.ShouldEqual, "abc")
@@ -902,7 +902,7 @@ func TestConfigEngine_Run_BoolPtrDataset(t *testing.T) {
 
 			result := PromoteGameModuleInfo{}
 			engine, _ := GetJSONTemplateEngine(context.Background(), time.Now().String(), configJSON)
-			_ = engine.WithDataset(env).ParseTo(&result).Run()
+			_,_ = engine.WithDataset(env).ParseTo(&result).Run()
 			convey.So(result.Title, convey.ShouldEqual, "webcast")
 			convey.So(result.SubTitle.SubTitleText, convey.ShouldEqual, "game")
 		}
@@ -934,7 +934,7 @@ func TestConfigEngine_Run_ObjectAndKV(t *testing.T) {
 				},
 			}
 
-			_ = engine.WithDataset(env).ParseTo(&result).Run()
+			_,_ = engine.WithDataset(env).ParseTo(&result).Run()
 			convey.So(result.Title, convey.ShouldEqualJSON, "{\"age\":30,\"name\":\"John\",\"object\":{\"ha\":\"ha\"}}")
 		}
 	})
@@ -968,7 +968,7 @@ func TestConfigEngine_Run_Use(t *testing.T) {
 
 			engine, _ := GetJSONTemplateEngine(context.Background(), time.Now().String(), configJSON)
 
-			_ = engine.WithDataset(env).ParseTo(&result).Run()
+			_,_ = engine.WithDataset(env).ParseTo(&result).Run()
 			convey.So(result.Title, convey.ShouldEqualJSON, "{\"age\":30,\"name\":\"John\"}")
 		}
 
@@ -996,7 +996,7 @@ func TestConfigEngine_Run_Use(t *testing.T) {
 
 			engine, _ := GetJSONTemplateEngine(context.Background(), time.Now().String(), configJSON)
 
-			_ = engine.WithDataset(env).ParseTo(&result).Run()
+			_,_ = engine.WithDataset(env).ParseTo(&result).Run()
 			convey.So(result.Title, convey.ShouldEqual, "true")
 		}
 
@@ -1025,7 +1025,7 @@ func TestConfigEngine_Run_Use(t *testing.T) {
 				},
 			}
 			engine, _ := GetJSONTemplateEngine(context.Background(), time.Now().String(), configJSON)
-			_ = engine.WithDataset(env).ParseTo(&result).Run()
+			_,_ = engine.WithDataset(env).ParseTo(&result).Run()
 			convey.So(result.Title, convey.ShouldEqual, "1ok2ok3ok")
 		}
 
@@ -1085,7 +1085,7 @@ func TestConfigEngine_Run_ReturnAndDo(t *testing.T) {
 
 			engine, _ := GetJSONTemplateEngine(context.Background(), time.Now().String(), configJSON)
 
-			_ = engine.WithDataset(env).ParseTo(&result).Run()
+			_,_ = engine.WithDataset(env).ParseTo(&result).Run()
 			convey.So(result.Title, convey.ShouldEqual, "haha")
 			convey.So(*env["Age"].(*int), convey.ShouldEqual, 24)
 			convey.So(env["ABool"], convey.ShouldEqual, false)
@@ -1114,7 +1114,7 @@ func TestConfigEngine_Run_ReturnAndDo(t *testing.T) {
 
 			engine, _ := GetJSONTemplateEngine(context.Background(), time.Now().String(), configJSON)
 
-			_ = engine.ParseTo(&result).Run()
+			_,_ = engine.ParseTo(&result).Run()
 			convey.So(result.Title, convey.ShouldEqual, "haha")
 		}
 
@@ -1145,7 +1145,7 @@ func TestConfigEngine_Run_CreateVar(t *testing.T) {
 
 			result := PromoteGameModuleInfo{}
 			engine, _ := GetJSONTemplateEngine(context.Background(), time.Now().String(), configJSON)
-			_ = engine.ParseTo(&result).Run()
+			_,_ = engine.ParseTo(&result).Run()
 			convey.So(result.Title, convey.ShouldEqual, "18")
 			convey.So(result.SubTitle.SubTitleText, convey.ShouldEqual, "20")
 		}
@@ -1180,7 +1180,7 @@ func TestConfigEngine_Run_CreateVar(t *testing.T) {
 			}
 			engine, _ := GetJSONTemplateEngine(context.Background(), time.Now().String(), configJSON)
 
-			_ = engine.WithDataset(env).ParseTo(&result).Run()
+			_,_ = engine.WithDataset(env).ParseTo(&result).Run()
 			convey.So(result.Title, convey.ShouldEqual, "tomjack")
 			convey.So(result.SubTitle.SubTitleText, convey.ShouldEqual, "tomjacksim")
 		}
@@ -1208,7 +1208,7 @@ func TestConfigEngine_Run_CreateVar(t *testing.T) {
 			result := PromoteGameModuleInfo{}
 			engine, _ := GetJSONTemplateEngine(context.Background(), time.Now().String(), configJSON)
 
-			_ = engine.ParseTo(&result).Run()
+			_,_ = engine.ParseTo(&result).Run()
 			convey.So(result.Title, convey.ShouldEqual, "123456")
 		}
 	})
@@ -1254,7 +1254,7 @@ func TestConfigEngine_Run_VarNestedExpression(t *testing.T) {
 				"AFalse": false,
 			}
 			engine, _ := GetJSONTemplateEngine(context.Background(), time.Now().String(), configJSON)
-			_ = engine.WithDataset(env).ParseTo(&result).Run()
+			_,_ = engine.WithDataset(env).ParseTo(&result).Run()
 			convey.So(result.Title, convey.ShouldEqual, "uuuabc123123233haha")
 			convey.So(env["SSR"], convey.ShouldBeNil)
 			convey.So(env["Sek"], convey.ShouldBeNil)
