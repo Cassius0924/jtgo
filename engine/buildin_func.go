@@ -206,7 +206,7 @@ func Use(ctx context.Context, path string, variables ...*Variable) any {
 	// 从引擎中获取对象
 	var result any
 	// 这里需要保持状态，因为可能会有多个 Use 在一个 for 循环中，如果不保持状态，会导致第2个及其以后的 Use 的数据集被清空
-	_ = engine.WithDataset(dataset).WithCustomEntry(path).ParseTo(&result).keepStatusRun()
+	_, _ = engine.WithDataset(dataset).WithCustomEntry(path).ParseTo(&result).keepStatusRun()
 	slog.InfoContext(ctx, "[configengine.Use](trace) end", "path", path, "result", result)
 	return result
 }

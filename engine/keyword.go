@@ -19,6 +19,7 @@ const (
 	KeywordElif     Keyword = "@elif"
 	KeywordElse     Keyword = "@else"
 	KeywordContinue Keyword = "@continue"
+	KeywordComment  Keyword = "@cmt"
 )
 
 var (
@@ -33,54 +34,77 @@ var (
 		KeywordElif,
 		KeywordElse,
 		KeywordContinue,
+		KeywordComment,
+	}
+
+	KeywordDelimiters = []rune{
+		' ',
+		'\t',
+		':',
 	}
 )
 
 // detectKeyword 检测关键词
 func detectKeyword(input string) (Keyword, string) {
 	// 不区分大小写
-	input = strings.ToLower(strings.TrimSpace(input))
+	lower := strings.ToLower(strings.TrimSpace(input))
 	for _, kw := range Keywords {
-		extra, found := strings.CutPrefix(input, string(kw))
-		if found {
-			return kw, strings.TrimSpace(extra)
+		if strings.HasPrefix(lower, string(kw)) {
+			statement := input[len(kw):]
+			// 关键词后面必须是空白、冒号、或结束
+			if statement == "" || lo.Contains(KeywordDelimiters, rune(statement[0])) {
+				return kw, strings.TrimSpace(statement)
+			}
 		}
 	}
 	return "", ""
 }
 
-func IsKeywordDo(input string) bool {
-	return strings.ToLower(input) == string(KeywordDo)
-}
-
-func IsKeywordReturn(input string) bool {
-	return strings.ToLower(input) == string(KeywordReturn)
-}
-
-func IsKeywordVar(input string) bool {
-	return strings.ToLower(input) == string(KeywordVar)
-}
-
-func IsKeywordDefault(input string) bool {
-	return strings.ToLower(input) == string(KeywordDefault)
-}
-
-func IsKeywordFor(input string) bool {
-	return strings.ToLower(input) == string(KeywordFor)
-}
-
-func IsKeywordIf(input string) bool {
-	return strings.ToLower(input) == string(KeywordIf)
-}
-
-func IsKeywordElif(input string) bool {
-	return strings.ToLower(input) == string(KeywordElif)
-}
-
-func IsKeywordElse(input string) bool {
-	return strings.ToLower(input) == string(KeywordElse)
+func isKeyword(input string, keyword Keyword) bool {
+	kw, _ := detectKeyword(input)
+	return kw == keyword
 }
 
 func IsAnyKeyword(input string) bool {
 	return lo.Contains(Keywords, Keyword(strings.ToLower(input)))
+}
+
+func IsDoKeyword(input string) bool {
+	return isKeyword(input, KeywordDo)
+}
+
+func IsReturnKeyword(input string) bool {
+	return isKeyword(input, KeywordReturn)
+}
+
+func IsVarKeyword(input string) bool {
+	return isKeyword(input, KeywordVar)
+}
+
+func IsDefaultKeyword(input string) bool {
+	return isKeyword(input, KeywordDefault)
+}
+
+func IsForStatement(input string) bool {
+	return isKeyword(input, KeywordFor)
+}
+
+func IsIfStatement(input string) bool {
+	return isKeyword(input, KeywordIf)
+}
+
+func IsElifStatement(input string) bool {
+	return isKeyword(input, KeywordElif)
+}
+
+func IsElseKeyword(input string) bool {
+	return isKeyword(input, KeywordElse)
+}
+
+func IsContinueKeyword(input string) bool {
+	return isKeyword(input, KeywordContinue)
+}
+
+func IsCommentKeyword(input string) bool {
+	return isKeyword(input, KeywordComment)
 }

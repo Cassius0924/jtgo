@@ -24,23 +24,25 @@ const (
 var (
 	templateIDToTemplate     sync.Map // 原始WCC配置，用于感知配置是否更新
 	templateIDToCompiledExps sync.Map // 缓存编译过的表达式集合
+	templateIDToLoopMeta     sync.Map // 缓存循环元数据集合
 	templateIDToCustomFuncs  sync.Map // 自定义函数集合
 
 	builtInFuncCollection = make(map[string]any) // 引擎内置函数集合
 )
 
 type JTEngine struct {
-	ctx               context.Context
-	templateID        string
-	metricsTags       map[string]string
-	template          string
-	entry             string
-	err               error
-	dataset           map[string]any
-	target            any
-	compiledExps      map[string]*vm.Program // 缓存编译过的表达式
-	fns               map[string]any         // 函数集合
-	localVariables    map[string]any         // 局部变量名称和值
+	ctx            context.Context
+	templateID     string
+	metricsTags    map[string]string
+	template       string
+	entry          string
+	err            error
+	dataset        map[string]any
+	target         any
+	compiledExps   map[string]*vm.Program // 缓存编译过的表达式
+	loopMetas      map[string]*LoopMeta   // 循环语句元数据
+	fns            map[string]any         // 函数集合
+	localVariables map[string]any         // 局部变量名称和值
 }
 
 // WithDataset 设置数据集
@@ -100,16 +102,18 @@ func GetJSONTemplateEngine(ctx context.Context, templateID, template string) (*J
 
 		cachedCompiledExps, _ := templateIDToCompiledExps.LoadOrStore(templateID, make(map[string]*vm.Program))
 		cachedCustomFuncs, _ := templateIDToCustomFuncs.LoadOrStore(templateID, make(map[string]any))
+		cachedLoopMeta, _ := templateIDToLoopMeta.LoadOrStore(templateID, make(map[string]*LoopMeta))
 
 		// 使用缓存的编译过的表达式
 		return &JTEngine{
-			ctx:               ctx,
-			templateID:        templateID,
-			entry:             defaultEntry,
-			template:          cachedTemplate.(string),                     // 使用原配置
-			compiledExps:      cachedCompiledExps.(map[string]*vm.Program), // 使用原缓存编译过的表达式
-			fns:               lo.Assign(builtInFuncCollection, cachedCustomFuncs.(map[string]any)),
-			localVariables:    make(map[string]any),
+			ctx:            ctx,
+			templateID:     templateID,
+			entry:          defaultEntry,
+			template:       cachedTemplate.(string),                     // 使用原配置
+			compiledExps:   cachedCompiledExps.(map[string]*vm.Program), // 使用原缓存编译过的表达式
+			loopMetas:      cachedLoopMeta.(map[string]*LoopMeta),       // 使用原缓存循环元数据
+			fns:            lo.Assign(builtInFuncCollection, cachedCustomFuncs.(map[string]any)),
+			localVariables: make(map[string]any),
 		}, nil
 	}
 
@@ -124,13 +128,14 @@ func createJSONTemplateEngine(ctx context.Context, templateID, template string) 
 	slog.InfoContext(ctx, "[JSONTemplateEngine.GetJSONTemplateEngine] template is updated, running preCompileExpressions", "templateID", templateID, "template", template, "custom function count", len(customFns.(map[string]any)))
 
 	engine := &JTEngine{
-		ctx:               ctx,
-		templateID:        templateID,
-		entry:             defaultEntry,
-		template:          template,
-		compiledExps:      make(map[string]*vm.Program),
-		fns:               lo.Assign(builtInFuncCollection, customFns.(map[string]any)), // 合并内置函数和自定义函数
-		localVariables:    make(map[string]any),
+		ctx:            ctx,
+		templateID:     templateID,
+		entry:          defaultEntry,
+		template:       template,
+		compiledExps:   make(map[string]*vm.Program),
+		loopMetas:      make(map[string]*LoopMeta),
+		fns:            lo.Assign(builtInFuncCollection, customFns.(map[string]any)), // 合并内置函数和自定义函数
+		localVariables: make(map[string]any),
 	}
 
 	err := engine.preCompileExpressions(template)
@@ -140,6 +145,7 @@ func createJSONTemplateEngine(ctx context.Context, templateID, template string) 
 
 	templateIDToTemplate.Store(templateID, template)
 	templateIDToCompiledExps.Store(templateID, engine.compiledExps)
+	templateIDToLoopMeta.Store(templateID, engine.loopMetas)
 
 	slog.InfoContext(ctx, "[JSONTemplateEngine.GetJSONTemplateEngine] create JSON template engine success", "templateID", templateID)
 	return engine, nil

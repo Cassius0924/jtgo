@@ -29,19 +29,43 @@ func (e *JTEngine) recursivePreCompile(configResult gjson.Result) {
 		}
 
 		fieldName := normalizeFieldName(field.String())
-		// 去掉${}符号，提取表达式
-		// expression, isExpression := extractExpression(fieldName)
-		keyword, extra := detectKeyword(fieldName)
-		isExpression := keyword != ""
+		keyword, statement := detectKeyword(fieldName)
 
 		// 这里预编译，是表达式并且未被编译过
-		if isExpression && e.compiledExps[extra] == nil {
-			// 编译表达式，然后缓存进compiledExps
-			program, err := e.exprCompileAsBool(extra)
-			if err != nil { // 说明expression不是以bool为最终值的表达式
-				slog.ErrorContext(e.ctx, "[JsonTemplateEngine.recursivePreCompile] expr.Compile err", "field", fieldName, "expression", extra, "error", err)
-			} else {
-				e.compiledExps[extra] = program
+		switch keyword {
+		case Keyword(""), KeywordComment:
+			// 不是表达式，跳过
+			break
+		case KeywordFor:
+			if statement != "" && e.loopMetas[statement] == nil {
+				// 从statement中抽取出循环的变量名
+				loopMeta, ok := parseLoopStatement(e.ctx, statement)
+				if !ok {
+					slog.ErrorContext(e.ctx, "[JsonTemplateEngine.recursivePreCompile] parse loop statement error", "field", fieldName, "expression", statement)
+					break
+				}
+				// 储存循环元数据
+				e.loopMetas[statement] = loopMeta
+
+				// 编译迭代对象
+				if e.compiledExps[loopMeta.Object] == nil {
+					program, err := e.exprCompile(loopMeta.Object)
+					if err != nil {
+						slog.ErrorContext(e.ctx, "[JsonTemplateEngine.recursivePreCompile] expr.Compile err", "field", fieldName, "expression", statement, "error", err)
+						break
+					}
+					e.compiledExps[loopMeta.Object] = program
+				}
+			}
+		default:
+			if statement != "" && e.compiledExps[statement] == nil {
+				// 编译表达式，然后缓存进compiledExps
+				program, err := e.exprCompileAsBool(statement)
+				if err != nil { // 说明expression不是以bool为最终值的表达式
+					slog.ErrorContext(e.ctx, "[JsonTemplateEngine.recursivePreCompile] expr.Compile err", "field", fieldName, "expression", statement, "error", err)
+					break
+				}
+				e.compiledExps[statement] = program
 			}
 		}
 

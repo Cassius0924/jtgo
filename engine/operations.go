@@ -3,8 +3,10 @@ package engine
 import (
 	"fmt"
 	"log/slog"
+	"reflect"
 
 	"github.com/cassius0924/jtgo/util"
+	"github.com/cassius0924/jtgo/util/ptr"
 	"github.com/tidwall/gjson"
 )
 
@@ -92,7 +94,7 @@ func (e *JTEngine) doOperations(node *gjson.Result) {
 			keyName := normalizeFieldName(key.String())
 			expression, isExpression := extractExpression(keyName)
 			if !isExpression { // 不是表达式，则跳过
-				slog.WarnContext(e.ctx, "[JsonTemplateEngine.doOperations] key is not an expression, please check whether the key is an expression!", "key", keyName)
+				slog.WarnContext(e.ctx, "[JsonTemplateEngine.doOperations] key is not an expression, please check if the key is an expression!", "key", keyName)
 				return true
 			}
 			isBoolResult, err := e.evaluateExpressionToBool(expression)
@@ -149,7 +151,7 @@ func (e *JTEngine) varAssignment(node *gjson.Result) {
 			}
 			// 如果表达式对应的不是一个 Object，则属于语法错误，跳过
 			if !value.IsObject() {
-				slog.ErrorContext(e.ctx, "[JsonTemplateEngine.varAssignment] expression value is not an object, please check whether the expression value is an object!", "key", keyName, "value", value.String())
+				slog.ErrorContext(e.ctx, "[JsonTemplateEngine.varAssignment] expression value is not an object, please check if the expression value is an object!", "key", keyName, "value", value.String())
 				return true
 			}
 
@@ -167,7 +169,7 @@ func (e *JTEngine) varAssignment(node *gjson.Result) {
 			return true
 		})
 	default:
-		slog.ErrorContext(e.ctx, "[JsonTemplateEngine.varAssignment] do value is not an object, please check whether the do value is an object!", "doValue", node.String())
+		slog.ErrorContext(e.ctx, "[JsonTemplateEngine.varAssignment] do value is not an object, please check if the do value is an object!", "doValue", node.String())
 	}
 }
 
@@ -181,13 +183,13 @@ func (e *JTEngine) judgeConditionalIf(node *gjson.Result, expression string, fra
 
 	// 表达式为true，替换值，并剪枝结束循环
 	if matched {
-		frame.conditionalCtx.resultValue = node
-		frame.conditionalCtx.isMatched = true
+		frame.ConditionalCtx.MatchedValue = node
+		frame.ConditionalCtx.IsMatched = true
 	}
+	frame.ConditionalCtx.IsNestedCondition = IsIfStatement(frame.FieldName) || IsElifStatement(frame.FieldName) || IsElseKeyword(frame.FieldName)
 
-	// 自增条件组序号
-	frame.conditionalCtx.groupNum.Inc()
-	slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.judgeConditionalIf](trace) condition evaluate result,\nkey = %s,\nvalue = %s,\nexpr = %s", frame.fieldName, node.String(), expression))
+	frame.ConditionalCtx.HasIfBranch = true
+	slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.judgeConditionalIf](trace) condition evaluate result,\nkey = %s,\nvalue = %s,\nexpr = %s", frame.FieldName, node.String(), expression))
 	return matched
 }
 
@@ -200,25 +202,148 @@ func (e *JTEngine) judgeConditionalElif(node *gjson.Result, expression string, f
 func (e *JTEngine) judgeConditionalElse(node *gjson.Result, frame *ParseFrame) bool {
 	// 判断当前 else 是否是孤儿else，即当前 else 是否属于某一个 if
 	// TODO: 封装成函数
-	if frame.conditionalCtx.groupNum.Value() == 0 {
+	if !frame.ConditionalCtx.HasIfBranch {
 		// 是孤儿 else 则视为 false
-		slog.WarnContext(e.ctx, "[JSONTemplateEngine.judgeConditionalElse] this else is orphan, please check whether the else belongs to an if!", "key", frame.fieldName)
+		slog.WarnContext(e.ctx, "[JSONTemplateEngine.judgeConditionalElse] this else is orphan, please check if the else belongs to an if!", "key", frame.FieldName)
 		return false
 	}
 
-	frame.conditionalCtx.resultValue = node
-	frame.conditionalCtx.isMatched = true
+	frame.ConditionalCtx.MatchedValue = node
+	frame.ConditionalCtx.IsMatched = true
+	frame.ConditionalCtx.IsNestedCondition = IsIfStatement(frame.FieldName) || IsElifStatement(frame.FieldName) || IsElseKeyword(frame.FieldName)
 
-	slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.judgeConditionalIf](trace) condition evaluate result,\nkey = %s,\nvalue = %s", frame.fieldName, node.String()))
+	// 重置条件分支的情况
+	frame.ConditionalCtx.resetBranchs()
+	slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.judgeConditionalIf](trace) condition evaluate result,\nkey = %s,\nvalue = %s", frame.FieldName, node.String()))
 	return true
 }
 
 // executeLoop 处理for循环
-func (e *JTEngine) executeLoop(node *gjson.Result, extra string, frame *ParseFrame) {
+func (e *JTEngine) executeLoop(node *gjson.Result, statement string, frame *ParseFrame) {
+	// 如果循环上下文不存在，则是第一次执行循环，进行初始化
+	// TODO: 抽成InitLoopContext
+	if frame.LoopCtx == nil {
+		frame.LoopCtx = NewLoopContext()
+		// 取出编译期解析的循环元数据
+		loopMeta, ok := e.loopMetas[statement]
+		if !ok {
+			slog.ErrorContext(e.ctx, "[JsonTemplateEngine.executeLoop] loop meta not found", "statement", statement)
+			return
+		}
 
+		// 取出编译期解析的循环对象 program
+		program, ok := e.compiledExps[loopMeta.Object]
+		if !ok {
+			slog.ErrorContext(e.ctx, "[JsonTemplateEngine.executeLoop] the compiled program of loop object not found.", "statement", statement)
+			return
+		}
+		// 计算循环对象
+		object, err := e.exprRun(program)
+		if err != nil {
+			slog.ErrorContext(e.ctx, "[JsonTemplateEngine.executeLoop] exprRun when getting loop object", "statement", statement, "error", err)
+			return
+		}
+
+		var (
+			objectRefl = reflect.ValueOf(object)
+			loopType   LoopType
+			mapIter    *reflect.MapIter
+			length     int
+		)
+
+		switch objectRefl.Kind() {
+		case reflect.Slice:
+			loopType = LoopTypeForWithSlice
+			length = objectRefl.Len()
+		case reflect.Array:
+			loopType = LoopTypeForWithArray
+			length = objectRefl.Len()
+		case reflect.Map:
+			loopType = LoopTypeForWithMap
+			mapIter = objectRefl.MapRange()
+		default:
+			slog.ErrorContext(e.ctx, "[JsonTemplateEngine.executeLoop] the loop object is not rangeable", "object", object)
+			return
+		}
+
+		frame.LoopCtx.Meta = loopMeta
+		frame.LoopCtx.Object = object
+		frame.LoopCtx.ObjectRefl = ptr.Of(objectRefl)
+		frame.LoopCtx.Type = loopType
+		frame.LoopCtx.MapIter = mapIter
+		frame.LoopCtx.Length = length
+		frame.LoopCtx.IsSerialFor = IsForStatement(frame.FieldName)
+	}
+
+	var (
+		loopCtx  = frame.LoopCtx
+		loopMeta = loopCtx.Meta
+		result   []any
+	)
+	switch loopCtx.Type {
+	case LoopTypeForWithArray, LoopTypeForWithSlice:
+		for ; loopCtx.Index < loopCtx.Length; loopCtx.Index++ {
+			item := loopCtx.ObjectRefl.Index(loopCtx.Index).Interface()
+
+			var (
+				originKey, originValue any
+			)
+			if loopMeta.Key != "" {
+				originKey = e.dataset[loopMeta.Key]
+				e.dataset[loopMeta.Key] = loopCtx.Index
+			}
+
+			if loopMeta.Value != "" {
+				originValue = e.dataset[loopMeta.Value]
+				e.dataset[loopMeta.Value] = item
+			}
+
+			result = append(result, e.interativeParse(node, frame.CurSubNodeFieldName))
+
+			// 处理完当前循环，恢复局部变量
+			if loopMeta.Key != "" {
+				e.dataset[loopMeta.Key] = originKey
+			}
+			if loopMeta.Value != "" {
+				e.dataset[loopMeta.Value] = originValue
+			}
+		}
+	case LoopTypeForWithMap:
+		for loopCtx.MapIter.Next() {
+			key := loopCtx.MapIter.Key().Interface()
+			value := loopCtx.MapIter.Value().Interface()
+
+			var (
+				originKey, originValue any
+			)
+			if loopMeta.Key != "" {
+				originKey = e.dataset[loopMeta.Key]
+				e.dataset[loopMeta.Key] = key
+			}
+			if loopMeta.Value != "" {
+				originValue = e.dataset[loopMeta.Value]
+				e.dataset[loopMeta.Value] = value
+			}
+
+			result = append(result, e.interativeParse(node, frame.CurSubNodeFieldName))
+
+			// 处理完当前循环，恢复局部变量
+			if loopMeta.Key != "" {
+				e.dataset[loopMeta.Key] = originKey
+			}
+			if loopMeta.Value != "" {
+				e.dataset[loopMeta.Value] = originValue
+			}
+		}
+	default:
+		slog.ErrorContext(e.ctx, "[JsonTemplateEngine.executeLoop] loop object is not a supported rangeable type", "statement", statement)
+		return
+	}
+
+	frame.Result = result
 }
 
 // continueLoop 处理循环中的CONTINUE
-func (e *JTEngine) continueLoop(node *gjson.Result, extra string, frame *ParseFrame) {
+func (e *JTEngine) continueLoop(node *gjson.Result, frame *ParseFrame) {
 
 }

@@ -25,6 +25,13 @@ const (
 )
 
 var (
+	loopStatementDelimiters = []string{
+		" in ",
+		":=",
+	}
+)
+
+var (
 	expressionRe = regexp.MustCompile(expressionRegexp) // 匹配${Expression}的正则表达式
 )
 
@@ -96,15 +103,17 @@ func (e *JTEngine) exprCompile(expression string, opts ...expr.Option) (*vm.Prog
 // exprRun 解析表达式
 func (e *JTEngine) exprRun(program *vm.Program) (any, error) {
 	// 把e.dataset和自定义函数合并到env中
+	// TODO: 解决频繁GC的问题，因为每次都要创建一个新的map
 	env := lo.Assign(e.dataset, e.fns)
 	subEngine := &JTEngine{
-		ctx:               e.ctx,
-		templateID:        e.templateID,
-		template:          e.template,
-		compiledExps:      e.compiledExps,
-		dataset:           e.dataset, // 继承数据集
-		fns:               e.fns,
-		localVariables:    make(map[string]any),
+		ctx:            e.ctx,
+		templateID:     e.templateID,
+		template:       e.template,
+		compiledExps:   e.compiledExps,
+		loopMetas:      e.loopMetas,
+		dataset:        e.dataset, // 继承数据集
+		fns:            e.fns,
+		localVariables: make(map[string]any),
 	}
 	e.ctx = context.WithValue(e.ctx, JSONTemplateEngineCtxKey, subEngine)
 	env["ctx"] = e.ctx
@@ -147,4 +156,53 @@ func (e *JTEngine) evaluateExpressionToBool(expression string) (bool, error) {
 func normalizeFieldName(fieldName string) string {
 	// 去掉头尾空格
 	return strings.TrimSpace(fieldName)
+}
+
+// parseLoopStatement 解析循环语句
+func parseLoopStatement(ctx context.Context, statement string) (*LoopMeta, bool) {
+	// statement like "index,val:=list"、"key,val := map"、"_,val in list"、"key,val := map"
+	statement = strings.TrimSpace(statement)
+
+	var (
+		keyAndValue        string
+		key, value, object string
+		found              bool
+	)
+	// 拆开kv和object
+	for _, delimiter := range loopStatementDelimiters {
+		keyAndValue, object, found = strings.Cut(statement, delimiter)
+		if found {
+			break
+		}
+	}
+	if !found {
+		slog.ErrorContext(ctx, "[JsonTemplateEngine.parseLoopStatement] parse loop statement error, please check the statement", "statement", statement)
+		return nil, false
+	}
+
+	// 如果循环对象为空则报错
+	object = strings.TrimSpace(object)
+	if object == "" {
+		slog.ErrorContext(ctx, "[JsonTemplateEngine.parseLoopStatement] parse loop statement error, object is empty", "statement", statement)
+		return nil, false
+	}
+
+	keyAndValue = strings.ReplaceAll(keyAndValue, " ", "")
+
+	// 解析key和value，没有两个值也需要报错
+	key, value, found = strings.Cut(keyAndValue, ",")
+	if !found {
+		slog.ErrorContext(ctx, "[JsonTemplateEngine.parseLoopStatement] parse key and value error, not found comma", "keyAndValue", keyAndValue)
+		return nil, false
+	}
+
+	// 如果是空白占位符，表示不需要key或value
+	key = lo.Ternary(key == "_", "", key)
+	value = lo.Ternary(value == "_", "", value)
+
+	return &LoopMeta{
+		Key:    key,
+		Value:  value,
+		Object: object,
+	}, true
 }
