@@ -163,3 +163,4 @@ func isTemplateJSONValid(ctx context.Context, template string) bool {
 	}
 	return valid
 }
+

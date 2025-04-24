@@ -52,8 +52,7 @@ func (e *JTEngine) keepStatusRun() (string, error) {
 
 	if e.target != nil {
 		// 将模板解析结果反序列化给target
-		err := sonic.UnmarshalString(resultStr, e.target)
-		if err != nil {
+		if err := sonic.UnmarshalString(resultStr, e.target); err != nil {
 			slog.ErrorContext(e.ctx, "[JSONTemplateEngine.Run] UnmarshalFromString config error, please check if the template JSON field name matches the target structure field name!", "finalTarget", util.GenerateStructFormatedString(result), "error", err)
 			return resultStr, werror.Join(werror.ErrParseToTargetFailed, err)
 		}
