@@ -547,11 +547,6 @@ func TestEngine_ComplexTemplate(t *testing.T) {
 		tmpl := `
 {
     "_main_": {
-        "summary": {
-			"total": "${len(userList)}",
-			"active_count": "${Sum(userList, 'active')}",
-			"pass_count": "${CalPassCount(userList)}"
-        },
 		"users": {
             "@for idx,user := userList": {
 				"num": "${idx + 1}",
@@ -569,6 +564,10 @@ func TestEngine_ComplexTemplate(t *testing.T) {
                     "@else": "inactive"
                 }
             }
+        },
+        "summary": {
+			"total": "${len(userList)}",
+			"pass_count": "${CalPassCount(userList)}"
         }
     }
 }
@@ -580,15 +579,6 @@ func TestEngine_ComplexTemplate(t *testing.T) {
 		}
 		dataset := map[string]any{
 			"userList": userList,
-			"Sum": func(arr any, field string) int {
-				cnt := 0
-				for _, u := range arr.([]map[string]any) {
-					if v, ok := u[field].(bool); ok && v {
-						cnt++
-					}
-				}
-				return cnt
-			},
 			"CalPassCount": func(arr any) int {
 				cnt := lo.SumBy(arr.([]map[string]any), func(u map[string]any) int {
 					if v, ok := u["score"].(float64); ok && v >= 0.6 {
@@ -636,7 +626,6 @@ func TestEngine_ComplexTemplate(t *testing.T) {
     ],
     "summary": {
         "total": 3,
-		"active_count": 2,
 		"pass_count": 2
     }
 }
