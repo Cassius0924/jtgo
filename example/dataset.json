@@ -1,0 +1,33 @@
+{
+    "userList": [
+        {
+            "last_name": "L",
+            "first_name": "Alice",
+            "age": 17,
+            "tags": [
+                "vip",
+                "beta"
+            ],
+            "score": 0.9,
+            "active": true
+        },
+        {
+            "last_name": "H",
+            "first_name": "Bob",
+            "age": 25,
+            "tags": [
+                "new"
+            ],
+            "score": 0.7,
+            "active": true
+        },
+        {
+            "last_name": "Z",
+            "first_name": "Tim",
+            "age": 65,
+            "tags": [],
+            "score": 0.5,
+            "active": false
+        }
+    ]
+}

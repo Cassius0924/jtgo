@@ -1,0 +1,27 @@
+
+{
+    "_main_": {
+		"users": {
+            "@for idx,user := userList": {
+				"num": "序号：${idx + 1}",
+                "name": "姓名：${user.first_name} ${user.last_name}",
+                "age_group": {
+                    "@if user.age < 18": "未成年人",
+                    "@elif user.age < 60": "成年人",
+                    "@else": "老年人"
+                },
+                "tags": "${user.tags}",
+                "score": "${user.score * 100}",
+                "status": {
+                    "@if user.active && user.score > 0.8": "excellent",
+                    "@elif user.active": "active",
+                    "@else": "inactive"
+                }
+            }
+        },
+        "summary": {
+			"total": "${len(userList)}",
+			"pass_count": "${CalPassCount(userList)}"
+        }
+    }
+}
