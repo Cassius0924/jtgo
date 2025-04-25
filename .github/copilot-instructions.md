@@ -1,3 +1,5 @@
+请严格遵循以下规范进行代码编写：
+
 ## 项目简介
 项目名称是 JTGO（JSON Template with Go），这是一个基于 Go 的 JSON 模板引擎，可以将 Go 的表达式嵌入到 JSON 中。它支持条件语句、循环、函数调用等功能，可以用于生成动态的 JSON 数据。
 
@@ -20,4 +22,5 @@
 - JSON 序列化相关操作不要使用标准库，请使用 `github.com/bytedance/sonic`
 - 使用 `go:embed` 来嵌入模板文件
 
-
+## 注释要求
+- 注释使用中文
