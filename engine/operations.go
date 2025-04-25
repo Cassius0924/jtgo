@@ -84,7 +84,7 @@ func (e *JTEngine) doOperations(node *gjson.Result) {
 			if value.Type != gjson.String {
 				return true
 			}
-			slog.InfoContext(e.ctx, fmt.Sprintf("[JsonTemplateEngine.doOperations](trace) do operation in array,\noperation = %s", value.String()))
+			slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.doOperations](trace) do operation in array,\noperation = %s", value.String()))
 			e.evaluateExpressionsInText(value.String())
 			return true
 		})
@@ -94,7 +94,7 @@ func (e *JTEngine) doOperations(node *gjson.Result) {
 			keyName := normalizeFieldName(key.String())
 			expression, isExpression := extractExpression(keyName)
 			if !isExpression { // 不是表达式，则跳过
-				slog.WarnContext(e.ctx, "[JsonTemplateEngine.doOperations] key is not an expression, please check if the key is an expression!", "key", keyName)
+				slog.WarnContext(e.ctx, "[JSONTemplateEngine.doOperations] key is not an expression, please check if the key is an expression!", "key", keyName)
 				return true
 			}
 			isBoolResult, err := e.evaluateExpressionToBool(expression)
@@ -103,14 +103,14 @@ func (e *JTEngine) doOperations(node *gjson.Result) {
 				return true
 			}
 			if isBoolResult {
-				slog.InfoContext(e.ctx, "[JsonTemplateEngine.doOperations] matched expression, nested do operation", "matchedExpression", expression)
+				slog.InfoContext(e.ctx, "[JSONTemplateEngine.doOperations] matched expression, nested do operation", "matchedExpression", expression)
 				e.doOperations(&value)
 				return false
 			}
 			return true
 		})
 	case node.Type == gjson.String:
-		slog.InfoContext(e.ctx, fmt.Sprintf("[JsonTemplateEngine.doOperations](trace) do operation.\noperation = %s", node.String()))
+		slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.doOperations](trace) do operation.\noperation = %s", node.String()))
 		e.evaluateExpressionsInText(node.String())
 	default:
 		return
@@ -119,7 +119,7 @@ func (e *JTEngine) doOperations(node *gjson.Result) {
 
 func (e *JTEngine) returnResult(node *gjson.Result) any {
 	result := e.replaceExpression(node)
-	slog.InfoContext(e.ctx, fmt.Sprintf("[JsonTemplateEngine.returnResult](trace) return result,\nresult = %s", util.GenerateStructFormatedString(result)))
+	slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.returnResult](trace) return result,\nresult = %s", util.GenerateStructFormatedString(result)))
 	return result
 }
 
@@ -146,12 +146,12 @@ func (e *JTEngine) varAssignment(node *gjson.Result) {
 				}
 				e.localVariables[keyName] = e.dataset[keyName]
 				e.dataset[keyName] = e.replaceExpression(&value)
-				slog.InfoContext(e.ctx, fmt.Sprintf("[JsonTemplateEngine.varAssignment](trace) create variable,\nkey = %s,\nvalue = %s,\nexpr = %s", keyName, util.GenerateStructFormatedString(e.dataset[keyName]), value.String()))
+				slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.varAssignment](trace) create variable,\nkey = %s,\nvalue = %s,\nexpr = %s", keyName, util.GenerateStructFormatedString(e.dataset[keyName]), value.String()))
 				return true
 			}
 			// 如果表达式对应的不是一个 Object，则属于语法错误，跳过
 			if !value.IsObject() {
-				slog.ErrorContext(e.ctx, "[JsonTemplateEngine.varAssignment] expression value is not an object, please check if the expression value is an object!", "key", keyName, "value", value.String())
+				slog.ErrorContext(e.ctx, "[JSONTemplateEngine.varAssignment] expression value is not an object, please check if the expression value is an object!", "key", keyName, "value", value.String())
 				return true
 			}
 
@@ -162,14 +162,14 @@ func (e *JTEngine) varAssignment(node *gjson.Result) {
 				return true
 			}
 			if isBoolResult {
-				slog.InfoContext(e.ctx, "[JsonTemplateEngine.varAssignment] matched expression, nested var assignment", "matchedExpression", expression)
+				slog.InfoContext(e.ctx, "[JSONTemplateEngine.varAssignment] matched expression, nested var assignment", "matchedExpression", expression)
 				e.varAssignment(&value)
 				return true
 			}
 			return true
 		})
 	default:
-		slog.ErrorContext(e.ctx, "[JsonTemplateEngine.varAssignment] do value is not an object, please check if the do value is an object!", "doValue", node.String())
+		slog.ErrorContext(e.ctx, "[JSONTemplateEngine.varAssignment] do value is not an object, please check if the do value is an object!", "doValue", node.String())
 	}
 }
 
@@ -227,20 +227,20 @@ func (e *JTEngine) executeLoop(node *gjson.Result, statement string, frame *Pars
 		// 取出编译期解析的循环元数据
 		loopMeta, ok := e.loopMetas[statement]
 		if !ok {
-			slog.ErrorContext(e.ctx, "[JsonTemplateEngine.executeLoop] loop meta not found", "statement", statement)
+			slog.ErrorContext(e.ctx, "[JSONTemplateEngine.executeLoop] loop meta not found", "statement", statement)
 			return
 		}
 
 		// 取出编译期解析的循环对象 program
 		program, ok := e.compiledExps[loopMeta.Object]
 		if !ok {
-			slog.ErrorContext(e.ctx, "[JsonTemplateEngine.executeLoop] the compiled program of loop object not found.", "statement", statement)
+			slog.ErrorContext(e.ctx, "[JSONTemplateEngine.executeLoop] the compiled program of loop object not found.", "statement", statement)
 			return
 		}
 		// 计算循环对象
 		object, err := e.exprRun(program)
 		if err != nil {
-			slog.ErrorContext(e.ctx, "[JsonTemplateEngine.executeLoop] exprRun when getting loop object", "statement", statement, "error", err)
+			slog.ErrorContext(e.ctx, "[JSONTemplateEngine.executeLoop] exprRun when getting loop object", "statement", statement, "error", err)
 			return
 		}
 
@@ -262,7 +262,7 @@ func (e *JTEngine) executeLoop(node *gjson.Result, statement string, frame *Pars
 			loopType = LoopTypeForWithMap
 			mapIter = objectRefl.MapRange()
 		default:
-			slog.ErrorContext(e.ctx, "[JsonTemplateEngine.executeLoop] the loop object is not rangeable", "object", object)
+			slog.ErrorContext(e.ctx, "[JSONTemplateEngine.executeLoop] the loop object is not rangeable", "object", object)
 			return
 		}
 
@@ -336,7 +336,7 @@ func (e *JTEngine) executeLoop(node *gjson.Result, statement string, frame *Pars
 			}
 		}
 	default:
-		slog.ErrorContext(e.ctx, "[JsonTemplateEngine.executeLoop] loop object is not a supported rangeable type", "statement", statement)
+		slog.ErrorContext(e.ctx, "[JSONTemplateEngine.executeLoop] loop object is not a supported rangeable type", "statement", statement)
 		return
 	}
 

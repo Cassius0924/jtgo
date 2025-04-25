@@ -236,6 +236,8 @@ func (e *JTEngine) checkBeforeRun() error {
 	return nil
 }
 
+// flattenNode 将 gjson.Result 节点的所有子节点扁平化为一个双端队列
+// TODO: 改成内存池
 func flattenNode(node *gjson.Result) *deque.Deque[*ds.Pair[gjson.Result, gjson.Result]] {
 	var result = ds.NewDeque[*ds.Pair[gjson.Result, gjson.Result]]()
 	node.ForEach(func(k, v gjson.Result) bool {
