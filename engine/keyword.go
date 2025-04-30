@@ -12,6 +12,7 @@ const (
 	// 关键词，全小写
 	KeywordDefault  Keyword = "@default"
 	KeywordDo       Keyword = "@do"
+	KeywordExec     Keyword = "@exec"
 	KeywordReturn   Keyword = "@return"
 	KeywordVar      Keyword = "@var"
 	KeywordFor      Keyword = "@for"
@@ -27,6 +28,7 @@ var (
 	Keywords = []Keyword{
 		KeywordDefault,
 		KeywordDo,
+		KeywordExec,
 		KeywordReturn,
 		KeywordVar,
 		KeywordFor,
@@ -45,7 +47,7 @@ var (
 )
 
 // detectKeyword 检测关键词
-func detectKeyword(input string) (Keyword, string) {
+func DetectKeyword(input string) (Keyword, string) {
 	// 不区分大小写
 	lower := strings.ToLower(strings.TrimSpace(input))
 	for _, kw := range Keywords {
@@ -61,7 +63,7 @@ func detectKeyword(input string) (Keyword, string) {
 }
 
 func isKeyword(input string, keyword Keyword) bool {
-	kw, _ := detectKeyword(input)
+	kw, _ := DetectKeyword(input)
 	return kw == keyword
 }
 
@@ -71,6 +73,10 @@ func IsAnyKeyword(input string) bool {
 
 func IsDoKeyword(input string) bool {
 	return isKeyword(input, KeywordDo)
+}
+
+func IsExecKeyword(input string) bool {
+	return isKeyword(input, KeywordExec)
 }
 
 func IsReturnKeyword(input string) bool {

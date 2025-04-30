@@ -22,7 +22,7 @@ type ParseFrame struct {
 	LoopCtx        *LoopContext
 }
 
-func (f *ParseFrame) isConditionalMatched() bool {
+func (f *ParseFrame) IsConditionalMatched() bool {
 	if f == nil {
 		return false
 	}
@@ -38,8 +38,8 @@ type ConditionalContext struct {
 	IsNestedCondition bool // 是否是嵌套条件
 }
 
-// resetBranchs 重置分支状态
-func (c *ConditionalContext) resetBranchs() {
+// ResetBranchs 重置分支状态
+func (c *ConditionalContext) ResetBranchs() {
 	c.HasIfBranch = false
 	c.HasElseBranch = false
 }

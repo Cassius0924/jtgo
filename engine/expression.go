@@ -35,7 +35,7 @@ var (
 	expressionRe = regexp.MustCompile(expressionRegexp) // 匹配${Expression}的正则表达式
 )
 
-// evaluateExpressionsInText 计算文案中的表达式并且拼接，这个函数不一定返回 string，可能是任意类型
+// evaluateExpressionsInText 计算文案中的表达式并且拼接
 func (e *JTEngine) evaluateExpressionsInText(input string) any {
 	text := strings.TrimSpace(input)
 	exps := extractAllExpression(text) // 找到text中所有${Path.Var}中的Path.Var

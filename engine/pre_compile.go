@@ -6,6 +6,7 @@ import (
 	"github.com/cassius0924/jtgo/ds"
 	"github.com/cassius0924/jtgo/werror"
 	"github.com/tidwall/gjson"
+
 )
 
 func (e *JTEngine) preCompileExpressions(configJSON string) error {
@@ -50,7 +51,7 @@ func (e *JTEngine) iterativePreCompile(configResult gjson.Result) {
 		}
 
 		fieldName := normalizeFieldName(field.String())
-		keyword, statement := detectKeyword(fieldName)
+		keyword, statement := DetectKeyword(fieldName)
 
 		// 这里预编译，是表达式并且未被编译过
 		switch keyword {

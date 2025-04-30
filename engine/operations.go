@@ -27,7 +27,7 @@ func (e *JTEngine) replaceExpression(input *gjson.Result) any {
 		input.ForEach(func(field, node gjson.Result) bool {
 			fieldName := normalizeFieldName(field.String())
 
-			switch keyword, _ := detectKeyword(fieldName); keyword {
+			switch keyword, _ := DetectKeyword(fieldName); keyword {
 			case KeywordReturn:
 				// 遇到 RETURN 关键词，直接返回
 				resultForReturn = e.returnResult(&node)
@@ -213,7 +213,7 @@ func (e *JTEngine) judgeConditionalElse(node *gjson.Result, frame *ParseFrame) b
 	frame.ConditionalCtx.IsNestedCondition = IsIfStatement(frame.FieldName) || IsElifStatement(frame.FieldName) || IsElseKeyword(frame.FieldName)
 
 	// 重置条件分支的情况
-	frame.ConditionalCtx.resetBranchs()
+	frame.ConditionalCtx.ResetBranchs()
 	slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.judgeConditionalIf](trace) condition evaluate result,\nkey = %s,\nvalue = %s", frame.FieldName, node.String()))
 	return true
 }

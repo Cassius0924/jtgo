@@ -67,7 +67,7 @@ func (e *JTEngine) keepStatusRun() (string, error) {
 func (e *JTEngine) interativeParse(templateNode *gjson.Result, templateFieldName string) any {
 	var (
 		frameStack     = ds.NewStack[*ParseFrame]() // 解析帧栈，用于深度优先遍历JSON树
-		result     any = make(map[string]any)       // 初始化结果为空map
+		result     any = make(map[string]any)             // 初始化结果为空map
 	)
 
 	// 解析栈的工作原理:
@@ -156,40 +156,17 @@ func (e *JTEngine) interativeParse(templateNode *gjson.Result, templateFieldName
 		frame.CurSubNodeFieldName = subNodeFieldName
 
 		// 处理模板语法关键字
-		switch keyword, statement := detectKeyword(subNodeFieldName); keyword {
-		case KeywordDo:
-			e.doOperations(&subNode)
-			continue
-		case KeywordVar:
-			e.varAssignment(&subNode)
-			continue
-		case KeywordIf:
-			matched := e.judgeConditionalIf(&subNode, statement, frame)
-			// 如果未命中当前条件，则继续尝试下一个条件
-			if !matched {
-				continue
+		keyword, statement := DetectKeyword(subNodeFieldName)
+		if keyword != "" {
+			// 获取关键字处理器并执行处理
+			processor := GetProcessor(keyword)
+			if processor != nil {
+				// 如果处理器返回false，表示不需要继续处理当前节点
+				continueProcess := processor.Process(&subNode, statement, frame, e)
+				if !continueProcess {
+					continue
+				}
 			}
-		case KeywordElif:
-			matched := e.judgeConditionalElif(&subNode, statement, frame)
-			if !matched {
-				continue
-			}
-		case KeywordElse:
-			matched := e.judgeConditionalElse(&subNode, frame)
-			if !matched {
-				continue
-			}
-		case KeywordFor:
-			e.executeLoop(&subNode, statement, frame)
-			continue
-		case KeywordContinue:
-			e.continueLoop(&subNode, frame)
-			continue
-		case KeywordComment:
-			// 注释，不做任何处理
-			continue
-		default:
-			// 其他字段名，继续正常处理
 		}
 
 		// 根据节点类型进行不同处理
@@ -210,7 +187,7 @@ func (e *JTEngine) interativeParse(templateNode *gjson.Result, templateFieldName
 			continue
 		default:
 			// 处理基本类型节点和其他情况
-			if frame.isConditionalMatched() {
+			if frame.IsConditionalMatched() {
 				// 条件语句匹配成功，使用条件匹配值
 				frame.Result = e.replaceExpression(frame.ConditionalCtx.MatchedValue)
 			} else if subNodeFieldName == "" {
@@ -237,7 +214,7 @@ func (e *JTEngine) checkBeforeRun() error {
 }
 
 // flattenNode 将 gjson.Result 节点的所有子节点扁平化为一个双端队列
-// TODO: 改成内存池
+// TODO: 改成对象池
 func flattenNode(node *gjson.Result) *deque.Deque[*ds.Pair[gjson.Result, gjson.Result]] {
 	var result = ds.NewDeque[*ds.Pair[gjson.Result, gjson.Result]]()
 	node.ForEach(func(k, v gjson.Result) bool {
