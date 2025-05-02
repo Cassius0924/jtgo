@@ -19,6 +19,10 @@ var (
 	ErrCompiledExpressionNotFound = errors.New("compiled expression not found")
 	// ErrExpressionResultNotBool 表达式结果不是bool类型
 	ErrExpressionResultNotBool = errors.New("expression result not bool")
+	// ErrLoopObjectNotRangeable 循环对象不可迭代
+	ErrLoopObjectNotRangeable = errors.New("loop object not rangeable")
+	// ErrLoopMetaNotFound 循环元数据未找到
+	ErrLoopMetaNotFound = errors.New("loop meta not found")
 )
 
 // 合并错误

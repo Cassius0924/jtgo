@@ -42,9 +42,14 @@ func initProcessorRegistry() {
 		registerProcessor(keywords.KeywordFor, &ForProcessor{})
 		registerProcessor(keywords.KeywordContinue, &ContinueProcessor{})
 
-		// 注册变量和操作处理器
+		// 注册变量处理器
 		registerProcessor(keywords.KeywordVar, &VarProcessor{})
+
+		// 注册操作处理器
 		registerProcessor(keywords.KeywordExec, &ExecProcessor{})
+
+		// 注册注释处理器
+		registerProcessor(keywords.KeywordComment, &CommentProcessor{})
 	})
 }
 

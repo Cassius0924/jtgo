@@ -1,4 +1,4 @@
-package parser 
+package parser
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"github.com/cassius0924/jtgo/engine/model"
 	"github.com/cassius0924/jtgo/util"
 	"github.com/cassius0924/jtgo/util/ptr"
+	"github.com/cassius0924/jtgo/werror"
 	"github.com/tidwall/gjson"
 )
 
@@ -163,52 +164,12 @@ func (p *Parser) judgeConditionalElse(ctx context.Context, node *gjson.Result, f
 // executeLoop 处理for循环
 func (p *Parser) executeLoop(ctx context.Context, node *gjson.Result, statement string, frame *model.ParseFrame) {
 	// 如果循环上下文不存在，则是第一次执行循环，进行初始化
-	// TODO: 抽成InitLoopContext
 	if frame.LoopCtx == nil {
-		frame.LoopCtx = model.NewLoopContext()
-		// 取出编译期解析的循环元数据
-		loopMeta, ok := p.loopMetas[statement]
-		if !ok {
-			slog.ErrorContext(ctx, "[JSONTemplateEngine.executeLoop] loop meta not found", "statement", statement)
-			return
-		}
-
-		// 取出编译期解析的循环对象
-		object, err := p.exprHandler.EvaluateExpression(ctx, p.compiledExps, loopMeta.Object)
+		err := p.initLoopContext(ctx, statement, frame)
 		if err != nil {
-			slog.ErrorContext(ctx, "[JSONTemplateEngine.executeLoop] exprRun when getting loop object", "statement", statement, "error", err)
+			p.err = err
 			return
 		}
-
-		var (
-			objectRefl = reflect.ValueOf(object)
-			loopType   model.LoopType
-			mapIter    *reflect.MapIter
-			length     int
-		)
-
-		switch objectRefl.Kind() {
-		case reflect.Slice:
-			loopType = model.LoopTypeForWithSlice
-			length = objectRefl.Len()
-		case reflect.Array:
-			loopType = model.LoopTypeForWithArray
-			length = objectRefl.Len()
-		case reflect.Map:
-			loopType = model.LoopTypeForWithMap
-			mapIter = objectRefl.MapRange()
-		default:
-			slog.ErrorContext(ctx, "[JSONTemplateEngine.executeLoop] the loop object is not rangeable", "object", object)
-			return
-		}
-
-		frame.LoopCtx.Meta = loopMeta
-		frame.LoopCtx.Object = object
-		frame.LoopCtx.ObjectRefl = ptr.Of(objectRefl)
-		frame.LoopCtx.Type = loopType
-		frame.LoopCtx.MapIter = mapIter
-		frame.LoopCtx.Length = length
-		frame.LoopCtx.IsSerialFor = keywords.IsForStatement(frame.FieldName)
 	}
 
 	var (
@@ -277,6 +238,56 @@ func (p *Parser) executeLoop(ctx context.Context, node *gjson.Result, statement 
 	}
 
 	frame.Result = result
+}
+
+// initLoopContext 初始化循环上下文
+func (p *Parser) initLoopContext(ctx context.Context, statement string, frame *model.ParseFrame) error {
+	frame.LoopCtx = model.NewLoopContext()
+	// 取出编译期解析的循环元数据
+	loopMeta, ok := p.loopMetas[statement]
+	if !ok {
+		slog.ErrorContext(ctx, "[JSONTemplateEngine.initLoopContext] loop meta not found", "statement", statement)
+		return werror.ErrLoopMetaNotFound
+	}
+
+	// 取出编译期解析的循环对象
+	object, err := p.exprHandler.EvaluateExpression(ctx, p.compiledExps, loopMeta.Object)
+	if err != nil {
+		slog.ErrorContext(ctx, "[JSONTemplateEngine.initLoopContext] exprRun when getting loop object", "statement", statement, "error", err)
+		return err
+	}
+
+	var (
+		objectRefl = reflect.ValueOf(object)
+		loopType   model.LoopType
+		mapIter    *reflect.MapIter
+		length     int
+	)
+
+	switch objectRefl.Kind() {
+	case reflect.Slice:
+		loopType = model.LoopTypeForWithSlice
+		length = objectRefl.Len()
+	case reflect.Array:
+		loopType = model.LoopTypeForWithArray
+		length = objectRefl.Len()
+	case reflect.Map:
+		loopType = model.LoopTypeForWithMap
+		mapIter = objectRefl.MapRange()
+	default:
+		slog.ErrorContext(ctx, "[JSONTemplateEngine.initLoopContext] the loop object is not rangeable", "object", object)
+		p.err = fmt.Errorf("loop object is not rangeable: %v", object)
+		return werror.ErrLoopObjectNotRangeable
+	}
+
+	frame.LoopCtx.Meta = loopMeta
+	frame.LoopCtx.Object = object
+	frame.LoopCtx.ObjectRefl = ptr.Of(objectRefl)
+	frame.LoopCtx.Type = loopType
+	frame.LoopCtx.MapIter = mapIter
+	frame.LoopCtx.Length = length
+	frame.LoopCtx.IsSerialFor = keywords.IsForStatement(frame.FieldName)
+	return nil
 }
 
 // continueLoop 处理循环中的CONTINUE
