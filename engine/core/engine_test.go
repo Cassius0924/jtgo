@@ -142,6 +142,7 @@ func TestEngine_ConditionalIfNested(t *testing.T) {
 		tmpl := `
 {
 	"_main_": {
+		"age": 12,
 		"name": {
 			"@if a": {
 				"@if b": "nothing",
@@ -165,6 +166,7 @@ func TestEngine_ConditionalIfNested(t *testing.T) {
 		result, _ := engine.WithDataset(dataset).Run()
 		convey.So(result, convey.ShouldEqualJSON, `
 {
+	"age": 12,
 	"name": "hello"
 }
 	`)
@@ -552,7 +554,10 @@ func TestEngine_ComplexTemplate(t *testing.T) {
 				"num": "${idx + 1}",
                 "name": "${user.first_name} ${user.last_name}",
                 "age_group": {
-                    "@if user.age < 18": "teenager",
+                    "@if user.age < 18": {
+						"@if user.age < 12": "teenager",
+						"@else": "teenager"
+					},
                     "@elif user.age < 60": "adult",
                     "@else": "senior"
                 },
@@ -576,6 +581,7 @@ func TestEngine_ComplexTemplate(t *testing.T) {
 			{"last_name": "L", "first_name": "Alice", "age": 17, "tags": []string{"vip", "beta"}, "score": 0.9, "active": true},
 			{"last_name": "H", "first_name": "Bob", "age": 25, "tags": []string{"new"}, "score": 0.7, "active": true},
 			{"last_name": "Z", "first_name": "Tim", "age": 65, "tags": []string{}, "score": 0.5, "active": false},
+			{"last_name": "S", "first_name": "Baby", "age": 9, "tags": []int{3, 2}, "score": 0.2, "active": true},
 		}
 		dataset := map[string]any{
 			"userList": userList,
@@ -601,7 +607,7 @@ func TestEngine_ComplexTemplate(t *testing.T) {
     "users": [
         {
 			"num": 1,
-            "name": "Alice L",
+			"name": "Alice L",
             "age_group": "teenager",
             "tags": ["vip", "beta"],
             "score": 90,
@@ -622,10 +628,18 @@ func TestEngine_ComplexTemplate(t *testing.T) {
             "tags": [],
             "score": 50,
             "status": "inactive"
-        }
+        },
+		{
+			"num": 4,
+			"name": "Baby S",
+			"age_group": "teenager",
+			"tags": [3, 2],
+			"score": 20,
+			"status": "active"
+		}
     ],
     "summary": {
-        "total": 3,
+        "total": 4,
 		"pass_count": 2
     }
 }

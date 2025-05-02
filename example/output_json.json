@@ -5,15 +5,15 @@
     },
     "users": [
         {
-            "num": "序号：1",
-            "name": "姓名：Alice L",
-            "age_group": "未成年人",
             "tags": [
                 "vip",
                 "beta"
             ],
             "score": 90,
-            "status": "excellent"
+            "status": "excellent",
+            "num": "序号：1",
+            "name": "姓名：Alice L",
+            "age_group": "未成年人"
         },
         {
             "tags": [
@@ -26,12 +26,12 @@
             "age_group": "成年人"
         },
         {
+            "score": 50,
+            "status": "inactive",
             "num": "序号：3",
             "name": "姓名：Tim Z",
             "age_group": "老年人",
-            "tags": [],
-            "score": 50,
-            "status": "inactive"
+            "tags": []
         }
     ]
 }

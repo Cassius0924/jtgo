@@ -139,9 +139,9 @@ func (p *Parser) interativeParse(ctx context.Context, templateNode *gjson.Result
 				frame.AssistResult["value"] = frame.Result
 			} else if assistRes, ok := frame.AssistResult["value"]; ok {
 				// 处理辅助结果
-				for k := range frame.Target.(map[string]any) {
-					delete(frame.Target.(map[string]any), k)
-				}
+				// for k := range frame.Target.(map[string]any) {
+				// 	delete(frame.Target.(map[string]any), k)
+				// }
 				frame.Target.(map[string]any)[frame.FieldName] = assistRes
 				delete(frame.AssistResult, "value")
 			} else {
