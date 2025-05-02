@@ -11,7 +11,6 @@ type Keyword string
 const (
 	// 关键词，全小写
 	KeywordDefault  Keyword = "@default"
-	KeywordDo       Keyword = "@do"
 	KeywordExec     Keyword = "@exec"
 	KeywordReturn   Keyword = "@return"
 	KeywordVar      Keyword = "@var"
@@ -27,7 +26,6 @@ var (
 	// Keywords 关键词列表
 	KeywordList = []Keyword{
 		KeywordDefault,
-		KeywordDo,
 		KeywordExec,
 		KeywordReturn,
 		KeywordVar,
@@ -70,10 +68,6 @@ func IsKeyword(input string, keyword Keyword) bool {
 func IsAnyKeyword(input string) bool {
 	kw, _ := DetectKeyword(input)
 	return kw != ""
-}
-
-func IsDoKeyword(input string) bool {
-	return IsKeyword(input, KeywordDo)
 }
 
 func IsExecKeyword(input string) bool {

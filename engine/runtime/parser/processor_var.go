@@ -20,13 +20,13 @@ func (p *VarProcessor) Process(ctx context.Context, node *gjson.Result, statemen
 	return false
 }
 
-// DoProcessor 处理 @do 关键字
-type DoProcessor struct {
+// ExecProcessor 处理 @do 关键字
+type ExecProcessor struct {
 	BaseProcessor
 }
 
 // Process 实现操作处理逻辑
-func (p *DoProcessor) Process(ctx context.Context, node *gjson.Result, statement string, frame *model.ParseFrame, parser *Parser) bool {
+func (p *ExecProcessor) Process(ctx context.Context, node *gjson.Result, statement string, frame *model.ParseFrame, parser *Parser) bool {
 	slog.InfoContext(ctx, "[JSONTemplateEngine.Run] do statement", "statement", statement)
 	parser.doOperations(ctx, node)
 	// 执行操作后不需要继续处理

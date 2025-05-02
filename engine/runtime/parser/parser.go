@@ -137,20 +137,26 @@ func (p *Parser) interativeParse(ctx context.Context, templateNode *gjson.Result
 			// if frame.ConditionalCtx.IsNestedCondition {
 			// 	// 嵌套条件语句的处理
 			// 	frame.AssistResult["value"] = frame.Result
+			// }
 
 			// 将当前帧的结果传递给父帧
 			if keywords.IsAnyKeyword(frame.FieldName) {
-				frame.AssistResult["value"] = frame.Result
-			} else if assistRes, ok := frame.AssistResult["value"]; ok {
-				// 处理辅助结果
-				// for k := range frame.Target.(map[string]any) {
-				// 	delete(frame.Target.(map[string]any), k)
-				// }
-				frame.Target.(map[string]any)[frame.FieldName] = assistRes
-				delete(frame.AssistResult, "value")
+				// 对于关键字字段，确保辅助结果中存储了当前结果
+				if _, ok := frame.AssistResult["value"]; !ok {
+					frame.AssistResult["value"] = frame.Result
+				}
 			} else {
-				// 常规结果处理
-				frame.Target.(map[string]any)[frame.FieldName] = frame.Result
+				// 非关键字字段的处理
+				var resultValue any
+				if assistRes, ok := frame.AssistResult["value"]; ok {
+					// 如果存在辅助结果，使用辅助结果作为值
+					resultValue = assistRes
+					delete(frame.AssistResult, "value")
+				} else {
+					resultValue = frame.Result
+				}
+				// 将结果设置到父帧的目标中
+				frame.Target.(map[string]any)[frame.FieldName] = resultValue
 			}
 			continue
 		}
@@ -234,8 +240,8 @@ func (p *Parser) replaceExpression(ctx context.Context, input *gjson.Result) any
 				// 遇到 RETURN 关键词，直接返回
 				resultForReturn = p.returnResult(ctx, &node)
 				return false
-			case keywords.KeywordDo:
-				// 是 DO 关键词，需要执行操作
+			case keywords.KeywordExec:
+				// 是 Exec 关键词，需要执行操作
 				p.doOperations(ctx, &node)
 				return true
 			case keywords.KeywordVar:

@@ -44,7 +44,7 @@ func initProcessorRegistry() {
 
 		// 注册变量和操作处理器
 		registerProcessor(keywords.KeywordVar, &VarProcessor{})
-		registerProcessor(keywords.KeywordDo, &DoProcessor{})
+		registerProcessor(keywords.KeywordExec, &ExecProcessor{})
 	})
 }
 
