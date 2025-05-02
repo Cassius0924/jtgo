@@ -23,6 +23,8 @@ var (
 	ErrLoopObjectNotRangeable = errors.New("loop object not rangeable")
 	// ErrLoopMetaNotFound 循环元数据未找到
 	ErrLoopMetaNotFound = errors.New("loop meta not found")
+	// ErrProcessorNotRegistered 处理器未注册
+	ErrProcessorNotRegistered = errors.New("processor not registered")
 )
 
 // 合并错误

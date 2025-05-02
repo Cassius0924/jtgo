@@ -174,12 +174,16 @@ func (p *Parser) interativeParse(ctx context.Context, templateNode *gjson.Result
 		if keyword != "" {
 			// 获取关键字处理器并执行处理
 			processor := GetProcessor(keyword)
-			if processor != nil {
-				// 如果处理器返回false，表示不需要继续处理当前节点
-				continueProcess := processor.Process(ctx, &subNode, statement, frame, p)
-				if !continueProcess {
-					continue
-				}
+			if processor == nil {
+				slog.ErrorContext(ctx, "[JSONTemplateEngine.Run] keyword processor not found", "keyword", keyword)
+				p.err = werror.ErrProcessorNotRegistered
+				return nil
+			}
+
+			// 如果处理器返回false，表示不需要继续处理当前节点
+			continueProcess := processor.Process(ctx, &subNode, statement, frame, p)
+			if !continueProcess {
+				continue
 			}
 		}
 

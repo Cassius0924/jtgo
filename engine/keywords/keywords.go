@@ -19,7 +19,7 @@ const (
 	KeywordElif     Keyword = "@elif"
 	KeywordElse     Keyword = "@else"
 	KeywordContinue Keyword = "@continue"
-	KeywordComment  Keyword = "@cmt"
+	KeywordCmt      Keyword = "@cmt"
 )
 
 var (
@@ -34,7 +34,7 @@ var (
 		KeywordElif,
 		KeywordElse,
 		KeywordContinue,
-		KeywordComment,
+		KeywordCmt,
 	}
 
 	KeywordDelimiters = []rune{
@@ -106,6 +106,6 @@ func IsContinueKeyword(input string) bool {
 	return IsKeyword(input, KeywordContinue)
 }
 
-func IsCommentKeyword(input string) bool {
-	return IsKeyword(input, KeywordComment)
+func IsCmtKeyword(input string) bool {
+	return IsKeyword(input, KeywordCmt)
 }

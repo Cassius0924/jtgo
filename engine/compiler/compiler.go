@@ -85,7 +85,7 @@ func (c *Compiler) iterativeCompile(ctx context.Context, templateNode *gjson.Res
 
 		// 这里预编译，是表达式并且未被编译过
 		switch keyword {
-		case keywords.Keyword(""), keywords.KeywordComment:
+		case keywords.Keyword(""), keywords.KeywordCmt:
 			// 不是表达式，跳过
 		case keywords.KeywordFor:
 			if statement != "" && c.loopMetas[statement] == nil {
@@ -169,4 +169,3 @@ func flattenNode(node *gjson.Result) *deque.Deque[*ds.Pair[gjson.Result, gjson.R
 	})
 	return result
 }
-

@@ -2,7 +2,6 @@ package parser
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/cassius0924/jtgo/engine/model"
 	"github.com/tidwall/gjson"
@@ -17,29 +16,5 @@ type VarProcessor struct {
 func (p *VarProcessor) Process(ctx context.Context, node *gjson.Result, statement string, frame *model.ParseFrame, parser *Parser) bool {
 	parser.varAssignment(ctx, node)
 	// 变量赋值后不需要继续处理
-	return false
-}
-
-// ExecProcessor 处理 @do 关键字
-type ExecProcessor struct {
-	BaseProcessor
-}
-
-// Process 实现操作处理逻辑
-func (p *ExecProcessor) Process(ctx context.Context, node *gjson.Result, statement string, frame *model.ParseFrame, parser *Parser) bool {
-	slog.InfoContext(ctx, "[JSONTemplateEngine.Run] do statement", "statement", statement)
-	parser.doOperations(ctx, node)
-	// 执行操作后不需要继续处理
-	return false
-}
-
-// CommentProcessor 处理 @cmt 注释关键字
-type CommentProcessor struct {
-	BaseProcessor
-}
-
-// Process 实现注释处理逻辑
-func (p *CommentProcessor) Process(ctx context.Context, node *gjson.Result, statement string, frame *model.ParseFrame, parser *Parser) bool {
-	// 注释不做任何处理，直接跳过
 	return false
 }

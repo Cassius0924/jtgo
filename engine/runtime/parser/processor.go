@@ -49,7 +49,7 @@ func initProcessorRegistry() {
 		registerProcessor(keywords.KeywordExec, &ExecProcessor{})
 
 		// 注册注释处理器
-		registerProcessor(keywords.KeywordComment, &CommentProcessor{})
+		registerProcessor(keywords.KeywordCmt, &CmtProcessor{})
 	})
 }
 
