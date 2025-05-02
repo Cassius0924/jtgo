@@ -1,11 +1,16 @@
-package engine
+package core
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 
 	"github.com/bytedance/sonic"
+	"github.com/cassius0924/jtgo/engine/compiler"
+	"github.com/cassius0924/jtgo/engine/exprs"
+	"github.com/cassius0924/jtgo/engine/model"
+	"github.com/cassius0924/jtgo/engine/runtime/parser"
 	"github.com/cassius0924/jtgo/werror"
 	"github.com/expr-lang/expr/vm"
 	"github.com/samber/lo"
@@ -39,15 +44,24 @@ type JTEngine struct {
 	err            error
 	dataset        map[string]any
 	target         any
-	compiledExps   map[string]*vm.Program // 缓存编译过的表达式
-	loopMetas      map[string]*LoopMeta   // 循环语句元数据
-	fns            map[string]any         // 函数集合
-	localVariables map[string]any         // 局部变量名称和值
+	compiledExps   map[string]*vm.Program     // 缓存编译过的表达式
+	loopMetas      map[string]*model.LoopMeta // 循环语句元数据
+	fns            map[string]any             // 函数集合
+	localVariables map[string]any             // 局部变量名称和值
+
+	exprHandler *exprs.ExprHandler // 表达式处理器
+	compiler    *compiler.Compiler // 模板编译器
+	parser      *parser.Parser     // 模板解析器
 }
 
 // WithDataset 设置数据集
 func (e *JTEngine) WithDataset(dataset map[string]any) *JTEngine {
 	e.dataset = dataset
+	e.exprHandler.SetDataset(dataset)
+	e.parser.SetDataset(dataset)
+
+	// subEngine := GetJSONTemplateEngineFromContext(e.ctx)
+	// subEngine.dataset = dataset
 	return e
 }
 
@@ -102,16 +116,16 @@ func GetJSONTemplateEngine(ctx context.Context, templateID, template string) (*J
 
 		cachedCompiledExps, _ := templateIDToCompiledExps.LoadOrStore(templateID, make(map[string]*vm.Program))
 		cachedCustomFuncs, _ := templateIDToCustomFuncs.LoadOrStore(templateID, make(map[string]any))
-		cachedLoopMeta, _ := templateIDToLoopMeta.LoadOrStore(templateID, make(map[string]*LoopMeta))
+		cachedLoopMeta, _ := templateIDToLoopMeta.LoadOrStore(templateID, make(map[string]*model.LoopMeta))
 
 		// 使用缓存的编译过的表达式
 		return &JTEngine{
 			ctx:            ctx,
 			templateID:     templateID,
 			entry:          defaultEntry,
-			template:       cachedTemplate.(string),                     // 使用原配置
+			template:       template,
 			compiledExps:   cachedCompiledExps.(map[string]*vm.Program), // 使用原缓存编译过的表达式
-			loopMetas:      cachedLoopMeta.(map[string]*LoopMeta),       // 使用原缓存循环元数据
+			loopMetas:      cachedLoopMeta.(map[string]*model.LoopMeta), // 使用原缓存循环元数据
 			fns:            lo.Assign(builtInFuncCollection, cachedCustomFuncs.(map[string]any)),
 			localVariables: make(map[string]any),
 		}, nil
@@ -123,26 +137,37 @@ func GetJSONTemplateEngine(ctx context.Context, templateID, template string) (*J
 
 // createJSONTemplateEngine 创建模板引擎
 func createJSONTemplateEngine(ctx context.Context, templateID, template string) (*JTEngine, error) {
-	customFns, _ := templateIDToCustomFuncs.LoadOrStore(templateID, make(map[string]any))
-
-	slog.InfoContext(ctx, "[JSONTemplateEngine.GetJSONTemplateEngine] template is updated, running preCompileExpressions", "templateID", templateID, "template", template, "custom function count", len(customFns.(map[string]any)))
+	var (
+		customFns, _ = templateIDToCustomFuncs.LoadOrStore(templateID, make(map[string]any))
+		fns          = lo.Assign(builtInFuncCollection, customFns.(map[string]any)) // 合并内置函数和自定义函数
+		exprHandler  = exprs.NewExprHandler(templateID, template, fns)
+	)
 
 	engine := &JTEngine{
 		ctx:            ctx,
 		templateID:     templateID,
 		entry:          defaultEntry,
 		template:       template,
-		compiledExps:   make(map[string]*vm.Program),
-		loopMetas:      make(map[string]*LoopMeta),
-		fns:            lo.Assign(builtInFuncCollection, customFns.(map[string]any)), // 合并内置函数和自定义函数
+		fns:            fns,
 		localVariables: make(map[string]any),
+
+		exprHandler: exprHandler,
+		compiler:    compiler.NewCompiler(exprHandler),
 	}
 
-	err := engine.preCompileExpressions(template)
+	slog.InfoContext(ctx, "[JSONTemplateEngine.GetJSONTemplateEngine] template is updated, running iterativePreCompile", "templateID", templateID, "template", template, "custom function count", len(customFns.(map[string]any)))
+	err := engine.compiler.Compile(ctx, template)
 	if err != nil {
 		return nil, err
 	}
 
+	// 迭代编译完成后，获取编译过的表达式和循环元数据
+	engine.compiledExps = engine.compiler.GetCompiledExps()
+	engine.loopMetas = engine.compiler.GetLoopMetas()
+	// 创建模板解析器
+	engine.parser = parser.NewParser(exprHandler, engine.compiledExps, engine.loopMetas)
+
+	// 缓存
 	templateIDToTemplate.Store(templateID, template)
 	templateIDToCompiledExps.Store(templateID, engine.compiledExps)
 	templateIDToLoopMeta.Store(templateID, engine.loopMetas)
@@ -156,6 +181,7 @@ func GetJSONTemplateEngineFromContext(ctx context.Context) *JTEngine {
 	return ctx.Value(JSONTemplateEngineCtxKey).(*JTEngine)
 }
 
+// isTemplateJSONValid 检查模板JSON是否合法
 func isTemplateJSONValid(ctx context.Context, template string) bool {
 	valid := sonic.ValidString(template)
 	if !valid {
@@ -164,3 +190,40 @@ func isTemplateJSONValid(ctx context.Context, template string) bool {
 	return valid
 }
 
+// Run 运行引擎，并且清空引擎状态
+func (e *JTEngine) Run() (string, error) {
+	slog.InfoContext(e.ctx, "[JSONTemplateEngine.Run](trace) Run function start")
+	defer func() {
+		// 清空调用链
+		e.clear()
+		slog.InfoContext(e.ctx, "[JSONTemplateEngine.Run](trace) Run function end")
+	}()
+	return e.keepStatusRun()
+}
+
+// checkBeforeRun 检查是否有必要的参数
+func (e *JTEngine) checkBeforeRun() error {
+	if e.template == "" {
+		slog.ErrorContext(e.ctx, "[JSONTemplateEngine.check] configJSON is empty")
+		return werror.ErrTemplateIsEmpty
+	}
+	return nil
+}
+
+// keepStatusRun 保持状态运行
+func (e *JTEngine) keepStatusRun() (string, error) {
+	if err := e.checkBeforeRun(); err != nil {
+		return "", err
+	}
+
+	defer func() {
+		// 恢复局部变量
+		for k, v := range e.localVariables {
+			e.dataset[k] = v
+			slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.Run] restore variable,\nkey = %s,\nvalue = %v", k, v))
+		}
+		e.localVariables = make(map[string]any)
+	}()
+
+	return e.parser.Parse(e.ctx, e.template, e.entry, e.target)
+}

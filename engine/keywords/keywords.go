@@ -1,4 +1,4 @@
-package engine
+package keywords
 
 import (
 	"strings"
@@ -25,7 +25,7 @@ const (
 
 var (
 	// Keywords 关键词列表
-	Keywords = []Keyword{
+	KeywordList = []Keyword{
 		KeywordDefault,
 		KeywordDo,
 		KeywordExec,
@@ -50,7 +50,7 @@ var (
 func DetectKeyword(input string) (Keyword, string) {
 	// 不区分大小写
 	lower := strings.ToLower(strings.TrimSpace(input))
-	for _, kw := range Keywords {
+	for _, kw := range KeywordList {
 		if strings.HasPrefix(lower, string(kw)) {
 			statement := input[len(kw):]
 			// 关键词后面必须是空白、冒号、或结束
@@ -62,55 +62,55 @@ func DetectKeyword(input string) (Keyword, string) {
 	return "", ""
 }
 
-func isKeyword(input string, keyword Keyword) bool {
+func IsKeyword(input string, keyword Keyword) bool {
 	kw, _ := DetectKeyword(input)
 	return kw == keyword
 }
 
 func IsAnyKeyword(input string) bool {
-	return lo.Contains(Keywords, Keyword(strings.ToLower(input)))
+	return lo.Contains(KeywordList, Keyword(strings.ToLower(input)))
 }
 
 func IsDoKeyword(input string) bool {
-	return isKeyword(input, KeywordDo)
+	return IsKeyword(input, KeywordDo)
 }
 
 func IsExecKeyword(input string) bool {
-	return isKeyword(input, KeywordExec)
+	return IsKeyword(input, KeywordExec)
 }
 
 func IsReturnKeyword(input string) bool {
-	return isKeyword(input, KeywordReturn)
+	return IsKeyword(input, KeywordReturn)
 }
 
 func IsVarKeyword(input string) bool {
-	return isKeyword(input, KeywordVar)
+	return IsKeyword(input, KeywordVar)
 }
 
 func IsDefaultKeyword(input string) bool {
-	return isKeyword(input, KeywordDefault)
+	return IsKeyword(input, KeywordDefault)
 }
 
 func IsForStatement(input string) bool {
-	return isKeyword(input, KeywordFor)
+	return IsKeyword(input, KeywordFor)
 }
 
 func IsIfStatement(input string) bool {
-	return isKeyword(input, KeywordIf)
+	return IsKeyword(input, KeywordIf)
 }
 
 func IsElifStatement(input string) bool {
-	return isKeyword(input, KeywordElif)
+	return IsKeyword(input, KeywordElif)
 }
 
 func IsElseKeyword(input string) bool {
-	return isKeyword(input, KeywordElse)
+	return IsKeyword(input, KeywordElse)
 }
 
 func IsContinueKeyword(input string) bool {
-	return isKeyword(input, KeywordContinue)
+	return IsKeyword(input, KeywordContinue)
 }
 
 func IsCommentKeyword(input string) bool {
-	return isKeyword(input, KeywordComment)
+	return IsKeyword(input, KeywordComment)
 }

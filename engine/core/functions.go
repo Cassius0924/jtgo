@@ -1,4 +1,4 @@
-package engine
+package core
 
 import "github.com/cassius0924/jtgo/util"
 
@@ -8,7 +8,7 @@ func registerFunction(fnMap map[string]any, fn any) {
 }
 
 func RegisterFunction(templateID string, fn any) {
-	if fn == nil {
+	if fn == nil || templateID == "" {
 		return
 	}
 	templateIDToCustomFuncs.LoadOrStore(templateID, make(map[string]any))

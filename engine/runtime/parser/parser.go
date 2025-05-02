@@ -1,72 +1,76 @@
-package engine
+package parser
 
 import (
-	"fmt"
+	"context"
 	"log/slog"
 
 	"github.com/bytedance/sonic"
 	"github.com/cassius0924/jtgo/ds"
+	"github.com/cassius0924/jtgo/engine/common"
+	"github.com/cassius0924/jtgo/engine/exprs"
+	"github.com/cassius0924/jtgo/engine/keywords"
+	"github.com/cassius0924/jtgo/engine/model"
 	"github.com/cassius0924/jtgo/util"
 	"github.com/cassius0924/jtgo/werror"
-	"github.com/liyue201/gostl/ds/deque"
+	"github.com/expr-lang/expr/vm"
 	"github.com/tidwall/gjson"
 )
 
-// Run 运行引擎，并且清空引擎状态
-func (e *JTEngine) Run() (string, error) {
-	slog.InfoContext(e.ctx, "[JSONTemplateEngine.Run](trace) Run function start")
-	defer func() {
-		// 清空调用链
-		e.clear()
-		slog.InfoContext(e.ctx, "[JSONTemplateEngine.Run](trace) Run function end")
-	}()
-	return e.keepStatusRun()
+type Parser struct {
+	exprHandler    *exprs.ExprHandler         // 表达式处理器
+	compiledExps   map[string]*vm.Program     // 缓存编译过的表达式
+	loopMetas      map[string]*model.LoopMeta // 循环语句元数据
+	dataset        map[string]any             // 数据集
+	localVariables map[string]any             // 局部变量名称和值
+
+	err error
 }
 
-// keepStatusRun 保持状态运行
-func (e *JTEngine) keepStatusRun() (string, error) {
-	if err := e.checkBeforeRun(); err != nil {
-		return "", err
+// NewParser 创建一个新的解析器实例
+func NewParser(exprHandler *exprs.ExprHandler, compiledExps map[string]*vm.Program, loopMetas map[string]*model.LoopMeta) *Parser {
+	return &Parser{
+		exprHandler:    exprHandler,
+		compiledExps:   compiledExps,
+		loopMetas:      loopMetas,
+		localVariables: make(map[string]any),
 	}
+}
 
-	defer func() {
-		// 恢复局部变量
-		for k, v := range e.localVariables {
-			e.dataset[k] = v
-			slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.Run] restore variable,\nkey = %s,\nvalue = %v", k, v))
-		}
-		e.localVariables = make(map[string]any)
-	}()
+// SetDataset 设置数据集
+func (p *Parser) SetDataset(dataset map[string]any) {
+	p.dataset = dataset
+}
 
+// Parse 解析JSON模板
+func (p *Parser) Parse(ctx context.Context, template, entry string, target any) (string, error) {
 	// 获取入口的模板
-	entryTemplateNode := gjson.Get(e.template, e.entry)
+	entryTemplateNode := gjson.Get(template, entry)
 	if !entryTemplateNode.Exists() {
-		slog.ErrorContext(e.ctx, "[JSONTemplateEngine.Run] entry not exists, please check whether entry name exists in the config JSON!", "entry", e.entry, "template", e.template)
+		slog.ErrorContext(ctx, "[JSONTemplateEngine.Run] entry not exists, please check whether entry name exists in the config JSON!", "entry", entry, "template", template)
 		return "", werror.ErrEntryNotFound
 	}
 
 	// 循环解析方法
-	result := e.interativeParse(&entryTemplateNode, e.entry)
-
+	result := p.interativeParse(ctx, &entryTemplateNode, entry)
 	resultStr := util.SonicToString(result)
 
-	if e.target != nil {
+	if target != nil {
 		// 将模板解析结果反序列化给target
-		if err := sonic.UnmarshalString(resultStr, e.target); err != nil {
-			slog.ErrorContext(e.ctx, "[JSONTemplateEngine.Run] UnmarshalFromString config error, please check if the template JSON field name matches the target structure field name!", "finalTarget", util.GenerateStructFormatedString(result), "error", err)
+		if err := sonic.UnmarshalString(resultStr, target); err != nil {
+			slog.ErrorContext(ctx, "[JSONTemplateEngine.Run] UnmarshalFromString config error, please check if the template JSON field name matches the target structure field name!", "finalTarget", util.GenerateStructFormatedString(result), "error", err)
 			return resultStr, werror.Join(werror.ErrParseToTargetFailed, err)
 		}
 	}
 
-	return resultStr, e.err
+	return resultStr, p.err
 }
 
 // interativeParse 迭代解析方法
 // 通过迭代方式解析JSON模板，将模板转换为最终输出结果
 // templateFieldName: 模板节点的字段名
-func (e *JTEngine) interativeParse(templateNode *gjson.Result, templateFieldName string) any {
+func (p *Parser) interativeParse(ctx context.Context, templateNode *gjson.Result, templateFieldName string) any {
 	var (
-		frameStack     = ds.NewStack[*ParseFrame]() // 解析帧栈，用于深度优先遍历JSON树
+		frameStack     = ds.NewStack[*model.ParseFrame]() // 解析帧栈，用于深度优先遍历JSON树
 		result     any = make(map[string]any)             // 初始化结果为空map
 	)
 
@@ -93,14 +97,14 @@ func (e *JTEngine) interativeParse(templateNode *gjson.Result, templateFieldName
 	// - 变量操作(var/do): 直接执行不入栈
 	//
 	// 初始化栈，将根节点压入栈中
-	frameStack.Push(&ParseFrame{
+	frameStack.Push(&model.ParseFrame{
 		Node:         templateNode,
 		FieldName:    templateFieldName,
 		Target:       result,
 		Result:       result,
-		AssistResult: make(map[string]any, 1),           // 辅助结果，用于存储临时数据
-		SubNodeIter:  flattenNode(templateNode).First(), // 子节点迭代器
-		ConditionalCtx: &ConditionalContext{ // 条件上下文
+		AssistResult: make(map[string]any, 1),                  // 辅助结果，用于存储临时数据
+		SubNodeIter:  common.FlattenNode(templateNode).First(), // 子节点迭代器
+		ConditionalCtx: &model.ConditionalContext{ // 条件上下文
 			IsMatched: false, // 初始状态未匹配
 		},
 	})
@@ -152,17 +156,17 @@ func (e *JTEngine) interativeParse(templateNode *gjson.Result, templateFieldName
 		subNodeField, subNode = subNodePair.First, subNodePair.Second
 		frame.SubNodeIter.Next()
 
-		subNodeFieldName := normalizeFieldName(subNodeField.String())
+		subNodeFieldName := common.NormalizeFieldName(subNodeField.String())
 		frame.CurSubNodeFieldName = subNodeFieldName
 
 		// 处理模板语法关键字
-		keyword, statement := DetectKeyword(subNodeFieldName)
+		keyword, statement := keywords.DetectKeyword(subNodeFieldName)
 		if keyword != "" {
 			// 获取关键字处理器并执行处理
 			processor := GetProcessor(keyword)
 			if processor != nil {
 				// 如果处理器返回false，表示不需要继续处理当前节点
-				continueProcess := processor.Process(&subNode, statement, frame, e)
+				continueProcess := processor.Process(ctx, &subNode, statement, frame, p)
 				if !continueProcess {
 					continue
 				}
@@ -173,14 +177,14 @@ func (e *JTEngine) interativeParse(templateNode *gjson.Result, templateFieldName
 		switch {
 		case subNode.IsObject():
 			// 如果是对象类型，需要创建新的解析帧并压入栈中，继续深度遍历
-			frameStack.Push(&ParseFrame{
+			frameStack.Push(&model.ParseFrame{
 				Node:         &subNode,
 				FieldName:    subNodeFieldName,
 				Target:       frame.Result,
 				Result:       make(map[string]any),
 				AssistResult: frame.AssistResult,
-				SubNodeIter:  flattenNode(&subNode).First(),
-				ConditionalCtx: &ConditionalContext{
+				SubNodeIter:  common.FlattenNode(&subNode).First(),
+				ConditionalCtx: &model.ConditionalContext{
 					IsMatched: false,
 				},
 			})
@@ -189,13 +193,13 @@ func (e *JTEngine) interativeParse(templateNode *gjson.Result, templateFieldName
 			// 处理基本类型节点和其他情况
 			if frame.IsConditionalMatched() {
 				// 条件语句匹配成功，使用条件匹配值
-				frame.Result = e.replaceExpression(frame.ConditionalCtx.MatchedValue)
+				frame.Result = p.replaceExpression(ctx, frame.ConditionalCtx.MatchedValue)
 			} else if subNodeFieldName == "" {
 				// 无字段名，直接设置结果
-				frame.Result = e.replaceExpression(&subNode)
+				frame.Result = p.replaceExpression(ctx, &subNode)
 			} else {
 				// 有字段名，设置结果的对应字段
-				frame.Result.(map[string]any)[subNodeFieldName] = e.replaceExpression(&subNode)
+				frame.Result.(map[string]any)[subNodeFieldName] = p.replaceExpression(ctx, &subNode)
 			}
 			continue
 		}
@@ -204,22 +208,65 @@ func (e *JTEngine) interativeParse(templateNode *gjson.Result, templateFieldName
 	return result
 }
 
-// checkBeforeRun 检查是否有必要的参数
-func (e *JTEngine) checkBeforeRun() error {
-	if e.template == "" {
-		slog.ErrorContext(e.ctx, "[JSONTemplateEngine.check] configJSON is empty")
-		return werror.ErrTemplateIsEmpty
+// replaceExpression 递归替换 object 中所有含有${Expression}的值
+func (p *Parser) replaceExpression(ctx context.Context, input *gjson.Result) any {
+	if input == nil || !input.Exists() {
+		return nil
 	}
-	return nil
-}
+	// JSON 共有 6 种类型：input, array, bool, number, null, string
+	switch {
+	case input.IsObject(): // input
+		var (
+			result          = make(map[string]any)
+			resultForReturn any
+			isExpression    bool
+		)
 
-// flattenNode 将 gjson.Result 节点的所有子节点扁平化为一个双端队列
-// TODO: 改成对象池
-func flattenNode(node *gjson.Result) *deque.Deque[*ds.Pair[gjson.Result, gjson.Result]] {
-	var result = ds.NewDeque[*ds.Pair[gjson.Result, gjson.Result]]()
-	node.ForEach(func(k, v gjson.Result) bool {
-		result.PushBack(ds.MakePair(k, v))
-		return true
-	})
-	return result
+		input.ForEach(func(field, node gjson.Result) bool {
+			fieldName := common.NormalizeFieldName(field.String())
+
+			switch keyword, _ := keywords.DetectKeyword(fieldName); keyword {
+			case keywords.KeywordReturn:
+				// 遇到 RETURN 关键词，直接返回
+				resultForReturn = p.returnResult(ctx, &node)
+				return false
+			case keywords.KeywordDo:
+				// 是 DO 关键词，需要执行操作
+				p.doOperations(ctx, &node)
+				return true
+			case keywords.KeywordVar:
+				// 是 VAR 关键词，需要进行变量赋值
+				p.varAssignment(ctx, &node)
+				return true
+			default:
+				// 其他情况，继续处理
+			}
+			_, isExpression = exprs.ExtractExpression(fieldName)
+			if !isExpression {
+				result[fieldName] = p.replaceExpression(ctx, &node)
+				return true
+			}
+
+			return true
+		})
+
+		if resultForReturn != nil {
+			return resultForReturn
+		}
+		return result
+	case input.IsArray(): // array
+		var result []any
+		for _, value := range input.Array() {
+			result = append(result, p.replaceExpression(ctx, &value))
+		}
+		return result
+	case input.IsBool(): // bool
+		return input.Bool()
+	case input.Type == gjson.Number: // number
+		return input.Num
+	case input.Type == gjson.Null: // null
+		return nil
+	default: // string
+		return p.exprHandler.EvaluateExpressionsInText(ctx, p.compiledExps, input.String()) // 使用数据集中的值替换text中的${Path.Var}
+	}
 }

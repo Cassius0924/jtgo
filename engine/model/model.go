@@ -1,4 +1,4 @@
-package engine
+package model
 
 import (
 	"reflect"
@@ -75,7 +75,7 @@ func NewLoopContext() *LoopContext {
 	}
 }
 
-// loopMeta 循环元数据，用于存储循环的键、值和对象的变量名
+// LoopMeta 循环元数据，用于存储循环的键、值和对象的变量名
 type LoopMeta struct {
 	Key    string // 循环的键，如果为 key 为 _ 则此处会为空
 	Value  string // 循环的值，如果为 value 为 _ 则此处会为空
