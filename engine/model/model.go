@@ -31,11 +31,10 @@ func (f *ParseFrame) IsConditionalMatched() bool {
 
 // ConditionalContext 条件判断上下文
 type ConditionalContext struct {
-	MatchedValue      *gjson.Result
-	IsMatched         bool
-	HasIfBranch       bool // 是否有if分支
-	HasElseBranch     bool // 是否有else分支
-	// IsNestedCondition bool // 是否是嵌套条件
+	MatchedValue  *gjson.Result
+	IsMatched     bool
+	HasIfBranch   bool // 是否有if分支
+	HasElseBranch bool // 是否有else分支
 }
 
 // ResetBranchs 重置分支状态

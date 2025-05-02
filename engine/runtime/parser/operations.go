@@ -16,8 +16,8 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-// doOperations 处理DO操作
-func (p *Parser) doOperations(ctx context.Context, node *gjson.Result) {
+// execOperations 处理DO操作
+func (p *Parser) execOperations(ctx context.Context, node *gjson.Result) {
 	if !node.Exists() {
 		return
 	}
@@ -47,7 +47,7 @@ func (p *Parser) doOperations(ctx context.Context, node *gjson.Result) {
 			}
 			if isBoolResult {
 				slog.InfoContext(ctx, "[JSONTemplateEngine.doOperations] matched expression, nested do operation", "matchedExpression", expression)
-				p.doOperations(ctx, &value)
+				p.execOperations(ctx, &value)
 				return false
 			}
 			return true
@@ -129,7 +129,6 @@ func (p *Parser) judgeConditionalIf(ctx context.Context, node *gjson.Result, exp
 		frame.ConditionalCtx.MatchedValue = node
 		frame.ConditionalCtx.IsMatched = true
 	}
-	// frame.ConditionalCtx.IsNestedCondition = keywords.IsIfStatement(frame.FieldName) || keywords.IsElifStatement(frame.FieldName) || keywords.IsElseKeyword(frame.FieldName)
 
 	frame.ConditionalCtx.HasIfBranch = true
 	slog.InfoContext(ctx, fmt.Sprintf("[JSONTemplateEngine.judgeConditionalIf](trace) condition evaluate result,\nkey = %s,\nvalue = %s,\nexpr = %s", frame.FieldName, node.String(), expression))
@@ -153,7 +152,6 @@ func (p *Parser) judgeConditionalElse(ctx context.Context, node *gjson.Result, f
 
 	frame.ConditionalCtx.MatchedValue = node
 	frame.ConditionalCtx.IsMatched = true
-	// frame.ConditionalCtx.IsNestedCondition = keywords.IsIfStatement(frame.FieldName) || keywords.IsElifStatement(frame.FieldName) || keywords.IsElseKeyword(frame.FieldName)
 
 	// 重置条件分支的情况
 	frame.ConditionalCtx.ResetBranchs()

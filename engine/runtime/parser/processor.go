@@ -50,6 +50,9 @@ func initProcessorRegistry() {
 
 		// 注册注释处理器
 		registerProcessor(keywords.KeywordCmt, &CmtProcessor{})
+
+		// 注册返回处理器
+		registerProcessor(keywords.KeywordReturn, &ReturnProcessor{})
 	})
 }
 

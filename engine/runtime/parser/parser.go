@@ -134,12 +134,6 @@ func (p *Parser) interativeParse(ctx context.Context, templateNode *gjson.Result
 			}
 
 			// 将当前帧的结果传递给父帧
-			// if frame.ConditionalCtx.IsNestedCondition {
-			// 	// 嵌套条件语句的处理
-			// 	frame.AssistResult["value"] = frame.Result
-			// }
-
-			// 将当前帧的结果传递给父帧
 			if keywords.IsAnyKeyword(frame.FieldName) {
 				// 对于关键字字段，确保辅助结果中存储了当前结果
 				if _, ok := frame.AssistResult["value"]; !ok {
@@ -246,7 +240,7 @@ func (p *Parser) replaceExpression(ctx context.Context, input *gjson.Result) any
 				return false
 			case keywords.KeywordExec:
 				// 是 Exec 关键词，需要执行操作
-				p.doOperations(ctx, &node)
+				p.execOperations(ctx, &node)
 				return true
 			case keywords.KeywordVar:
 				// 是 VAR 关键词，需要进行变量赋值
