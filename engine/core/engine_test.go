@@ -108,7 +108,6 @@ func TestEngine_ConditionalIf(t *testing.T) {
 	})
 }
 
-
 func TestEngine_ConditionalIf2(t *testing.T) {
 	convey.Convey("TestEngine_ConditionalIf2", t, func() {
 		{
@@ -170,7 +169,6 @@ func TestEngine_ConditionalIf3(t *testing.T) {
 
 	})
 }
-
 
 func TestEngine_ConditionalIfNested(t *testing.T) {
 	convey.Convey("TestEngine_ConditionalIfNested", t, func() {
@@ -587,13 +585,55 @@ func TestEngine_LoopSliceNested(t *testing.T) {
 	})
 }
 
+func TestEngine_Comment(t *testing.T) {
+	convey.Convey("TestEngine_Comment", t, func() {
+		tmpl := `
+{
+	"_main_": {
+		"@cmt": "this is a comment",
+		"name": "hello",
+		"@cmt": 2,
+		"@cmt": null,
+		"@cmt": true,
+		"@cmt": {
+			"@if a": "nothing"
+		},
+		"@cmt": [
+			"this is a comment",
+			"this is a comment too"
+		]
+	}
+}
+`
+		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_Comment", tmpl)
+		convey.So(err, convey.ShouldBeNil)
+
+		dataset := map[string]any{
+			"a": true,
+		}
+
+		result, _ := engine.WithDataset(dataset).Run()
+
+		convey.So(result, convey.ShouldEqualJSON, `
+{
+	"name": "hello"
+}
+`)
+
+	})
+}
+
 func TestEngine_ComplexTemplate(t *testing.T) {
 	convey.Convey("TestEngine_ComplexTemplate", t, func() {
 		tmpl := `
 {
     "_main_": {
 		"users": {
+			"@cmt": "this is a comment",
+			"@cmt": 2,
+			"@cmt": true,
             "@for idx,user := userList": {
+				"@cmt": "this is a comment",
 				"num": "${idx + 1}",
                 "name": "${user.first_name} ${user.last_name}",
                 "age_group": {
@@ -609,10 +649,12 @@ func TestEngine_ComplexTemplate(t *testing.T) {
                 "status": {
                     "@if user.active && user.score > 0.8": "excellent",
                     "@elif user.active": "active",
+					"@cmt": "this is a comment",
                     "@else": "inactive"
                 }
             }
         },
+		"@cmt": "this is a comment",
         "summary": {
 			"total": "${len(userList)}",
 			"pass_count": "${CalPassCount(userList)}"
