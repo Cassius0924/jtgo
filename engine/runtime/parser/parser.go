@@ -134,8 +134,12 @@ func (p *Parser) interativeParse(ctx context.Context, templateNode *gjson.Result
 			}
 
 			// 将当前帧的结果传递给父帧
-			if frame.ConditionalCtx.IsNestedCondition {
-				// 嵌套条件语句的处理
+			// if frame.ConditionalCtx.IsNestedCondition {
+			// 	// 嵌套条件语句的处理
+			// 	frame.AssistResult["value"] = frame.Result
+
+			// 将当前帧的结果传递给父帧
+			if keywords.IsAnyKeyword(frame.FieldName) {
 				frame.AssistResult["value"] = frame.Result
 			} else if assistRes, ok := frame.AssistResult["value"]; ok {
 				// 处理辅助结果

@@ -35,7 +35,7 @@ type ConditionalContext struct {
 	IsMatched         bool
 	HasIfBranch       bool // 是否有if分支
 	HasElseBranch     bool // 是否有else分支
-	IsNestedCondition bool // 是否是嵌套条件
+	// IsNestedCondition bool // 是否是嵌套条件
 }
 
 // ResetBranchs 重置分支状态

@@ -68,7 +68,8 @@ func IsKeyword(input string, keyword Keyword) bool {
 }
 
 func IsAnyKeyword(input string) bool {
-	return lo.Contains(KeywordList, Keyword(strings.ToLower(input)))
+	kw, _ := DetectKeyword(input)
+	return kw != ""
 }
 
 func IsDoKeyword(input string) bool {

@@ -108,6 +108,7 @@ func TestEngine_ConditionalIf(t *testing.T) {
 	})
 }
 
+
 func TestEngine_ConditionalIf2(t *testing.T) {
 	convey.Convey("TestEngine_ConditionalIf2", t, func() {
 		{
@@ -136,6 +137,40 @@ func TestEngine_ConditionalIf2(t *testing.T) {
 		}
 	})
 }
+
+func TestEngine_ConditionalIf3(t *testing.T) {
+	convey.Convey("TestEngine_ConditionalIf", t, func() {
+		tmpl := `
+{
+	"_main_": {
+		"name": {
+			"@if a": {
+				"actual": "hello"
+			}
+		}
+	}
+}
+	`
+		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_ConditionalIf", tmpl)
+		convey.So(err, convey.ShouldBeNil)
+
+		dataset := map[string]any{
+			"a": true,
+		}
+
+		result, _ := engine.WithDataset(dataset).Run()
+
+		convey.So(result, convey.ShouldEqualJSON, `
+{
+	"name": {
+		"actual": "hello"
+	}
+}
+	`)
+
+	})
+}
+
 
 func TestEngine_ConditionalIfNested(t *testing.T) {
 	convey.Convey("TestEngine_ConditionalIfNested", t, func() {
