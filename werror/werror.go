@@ -27,6 +27,12 @@ var (
 	ErrLoopMetaNotFound = errors.New("loop meta not found")
 	// ErrProcessorNotRegistered 处理器未注册
 	ErrProcessorNotRegistered = errors.New("processor not registered")
+	// ErrCachedCompiledExpressionsNotFound 缓存的编译过的表达式未找到
+	ErrCachedCompiledExpressionsNotFound = errors.New("cached compiled expressions not found")
+	// ErrCachedLoopMetaNotFound 缓存的循环元数据未找到
+	ErrCachedLoopMetaNotFound = errors.New("cached loop meta not found")
+	// ErrCachedCustomFunctionsNotFound 缓存的自定义函数未找到
+	ErrCachedCustomFunctionsNotFound = errors.New("cached custom functions not found")
 )
 
 // Join 合并错误

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"runtime"
 	"strconv"
 	"testing"
 	"time"
@@ -104,9 +103,9 @@ func TestConfigEngine_CreateEngine(t *testing.T) {
 		convey.So(err4, convey.ShouldBeNil)
 
 		engine2, _ := GetJSONTemplateEngine(ctx, "test", configJSON)
-		fnName1 := runtime.FuncForPC(reflect.ValueOf(engine1.fns["toInt"]).Pointer()).Name()
-		fnName2 := runtime.FuncForPC(reflect.ValueOf(engine2.fns["toInt"]).Pointer()).Name()
-		convey.So(fnName1, convey.ShouldEqual, fnName2)
+		// fnName1 := runtime.FuncForPC(reflect.ValueOf(engine1.fns["toInt"]).Pointer()).Name()
+		// fnName2 := runtime.FuncForPC(reflect.ValueOf(engine2.fns["toInt"]).Pointer()).Name()
+		// convey.So(fnName1, convey.ShouldEqual, fnName2)
 		convey.So(engine1.dataset, convey.ShouldResemble, engine2.dataset)
 		convey.So(engine1.template, convey.ShouldResemble, engine2.template)
 
@@ -124,8 +123,8 @@ func TestConfigEngine_CreateEngine(t *testing.T) {
 		`
 
 		engine3, _ := GetJSONTemplateEngine(context.Background(), "test", configJSON)
-		fnName3 := runtime.FuncForPC(reflect.ValueOf(engine3.fns["toInt"]).Pointer()).Name()
-		convey.So(fnName2, convey.ShouldEqual, fnName3)
+		// fnName3 := runtime.FuncForPC(reflect.ValueOf(engine3.fns["toInt"]).Pointer()).Name()
+		// convey.So(fnName2, convey.ShouldEqual, fnName3)
 		convey.So(engine2.dataset, convey.ShouldResemble, engine3.dataset)
 		convey.So(engine2.template, convey.ShouldResemble, engine3.template)
 	})

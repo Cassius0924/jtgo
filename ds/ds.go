@@ -50,8 +50,13 @@ func NewArray[T any](size int) *array.Array[T] {
 }
 
 // NewVector 创建动态数组
-func NewVector[T any]() *vector.Vector[T] {
+func NewVector[T any](capacity ...int) *vector.Vector[T] {
 	return vector.New[T]()
+}
+
+// NewVectorWithCap 创建动态数组并预留容量
+func NewVectorWithCap[T any](capacity int) *vector.Vector[T] {
+	return vector.New[T](vector.WithCapacity(capacity))
 }
 
 // NewForwardList 创建单向链表

@@ -27,8 +27,7 @@ const (
 )
 
 var (
-	// TODO: 改成缓存gjson的结果，避免每次都要解析
-	templateIDToTemplate     sync.Map // 原始WCC配置，用于感知配置是否更新
+	templateIDToTemplate     sync.Map // 缓存模板节点
 	templateIDToCompiledExps sync.Map // 缓存编译过的表达式集合
 	templateIDToLoopMeta     sync.Map // 缓存循环元数据集合
 	templateIDToCustomFuncs  sync.Map // 自定义函数集合
@@ -47,7 +46,6 @@ type JTEngine struct {
 	target         any
 	compiledExps   map[string]*vm.Program     // 缓存编译过的表达式
 	loopMetas      map[string]*model.LoopMeta // 循环语句元数据
-	fns            map[string]any             // 函数集合
 	localVariables map[string]any             // 局部变量名称和值
 
 	exprHandler *exprs.ExprHandler // 表达式处理器
@@ -98,33 +96,56 @@ func (e *JTEngine) clear() {
 
 func GetJSONTemplateEngine(ctx context.Context, templateID, template string) (*JTEngine, error) {
 	if templateID == "" {
-		slog.ErrorContext(ctx, "[JSONTemplateEngine.GetJSONTemplateEngine] templateID is empty", "templateID", templateID)
+		slog.ErrorContext(ctx, "[core.GetJSONTemplateEngine] templateID is empty", "templateID", templateID)
 		return nil, werror.ErrTemplateIDIsEmpty
 	}
 	if template == "" {
-		slog.ErrorContext(ctx, "[JSONTemplateEngine.GetJSONTemplateEngine] template is empty", "template", template)
+		slog.ErrorContext(ctx, "[core.GetJSONTemplateEngine] template is empty", "template", template)
 		return nil, werror.ErrTemplateIsEmpty
 	}
 
 	validateErr := util.ValidateJSON(template)
-	cachedTemplate, _ := templateIDToTemplate.Load(templateID)
+	cachedTemplateNode, _ := templateIDToTemplate.Load(templateID)
 
 	if validateErr != nil {
-		slog.ErrorContext(ctx, "[JSONTemplateEngine.GetJSONTemplateEngine] template is invalid JSON", "templateID", templateID, "template", template, "error", validateErr)	
+		slog.ErrorContext(ctx, "[core.GetJSONTemplateEngine] template is invalid JSON", "templateID", templateID, "template", template, "error", validateErr)
 	}
 
-	if template == cachedTemplate || validateErr != nil { // 模板无更新 或 模板格式不合法 则使用缓存
-		if cachedTemplate == nil {
+	if template == cachedTemplateNode || validateErr != nil { // 模板无更新 或 模板格式不合法 则使用缓存
+		if cachedTemplateNode == nil {
 			if validateErr != nil {
 				return nil, werror.Join(werror.ErrTemplateIsInvalidJSON, validateErr)
 			}
-			slog.ErrorContext(ctx, "[JSONTemplateEngine.GetJSONTemplateEngine] template is empty", "templateID", templateID)
+			slog.ErrorContext(ctx, "[core.GetJSONTemplateEngine] template is empty", "templateID", templateID)
 			return nil, werror.ErrTemplateIsEmpty
 		}
 
-		cachedCompiledExps, _ := templateIDToCompiledExps.LoadOrStore(templateID, make(map[string]*vm.Program))
-		cachedCustomFuncs, _ := templateIDToCustomFuncs.LoadOrStore(templateID, make(map[string]any))
-		cachedLoopMeta, _ := templateIDToLoopMeta.LoadOrStore(templateID, make(map[string]*model.LoopMeta))
+		var (
+			cachedCompiledExps map[string]*vm.Program
+			cachedCustomFuncs  map[string]any
+			cachedLoopMeta     map[string]*model.LoopMeta
+		)
+		if compiledExps, ok := templateIDToCompiledExps.LoadOrStore(templateID, make(map[string]*vm.Program)); ok {
+			cachedCompiledExps = compiledExps.(map[string]*vm.Program)
+		} else {
+			slog.ErrorContext(ctx, "[core.GetJSONTemplateEngine] cached compiled expressions not found", "templateID", templateID)
+			return nil, werror.ErrCachedCompiledExpressionsNotFound
+		}
+		if customFuncs, ok := templateIDToCustomFuncs.LoadOrStore(templateID, make(map[string]any)); ok {
+			cachedCustomFuncs = customFuncs.(map[string]any)
+		} else {
+			slog.ErrorContext(ctx, "[core.GetJSONTemplateEngine] cached custom functions not found", "templateID", templateID)
+			return nil, werror.ErrCachedCustomFunctionsNotFound
+		}
+		if loopMeta, ok := templateIDToLoopMeta.LoadOrStore(templateID, make(map[string]*model.LoopMeta)); ok {
+			cachedLoopMeta = loopMeta.(map[string]*model.LoopMeta)
+		} else {
+			slog.ErrorContext(ctx, "[core.GetJSONTemplateEngine] cached loop meta not found", "templateID", templateID)
+			return nil, werror.ErrCachedLoopMetaNotFound
+		}
+
+		fns := lo.Assign(builtInFuncCollection, cachedCustomFuncs)
+		exprHandler := exprs.NewExprHandler(templateID, template, fns)
 
 		// 使用缓存的编译过的表达式
 		return &JTEngine{
@@ -132,10 +153,12 @@ func GetJSONTemplateEngine(ctx context.Context, templateID, template string) (*J
 			templateID:     templateID,
 			entry:          defaultEntry,
 			template:       template,
-			compiledExps:   cachedCompiledExps.(map[string]*vm.Program), // 使用原缓存编译过的表达式
-			loopMetas:      cachedLoopMeta.(map[string]*model.LoopMeta), // 使用原缓存循环元数据
-			fns:            lo.Assign(builtInFuncCollection, cachedCustomFuncs.(map[string]any)),
+			compiledExps:   cachedCompiledExps, // 使用原缓存编译过的表达式
+			loopMetas:      cachedLoopMeta,     // 使用原缓存循环元数据
 			localVariables: make(map[string]any),
+
+			exprHandler: exprHandler,
+			parser:      parser.NewParser(exprHandler, cachedCompiledExps, cachedLoopMeta),
 		}, nil
 	}
 
@@ -156,14 +179,13 @@ func createJSONTemplateEngine(ctx context.Context, templateID, template string) 
 		templateID:     templateID,
 		entry:          defaultEntry,
 		template:       template,
-		fns:            fns,
 		localVariables: make(map[string]any),
 
 		exprHandler: exprHandler,
 		compiler:    compiler.NewCompiler(exprHandler),
 	}
 
-	slog.InfoContext(ctx, "[JSONTemplateEngine.GetJSONTemplateEngine] template is updated, running iterativePreCompile", "templateID", templateID, "template", template, "custom function count", len(customFns.(map[string]any)))
+	slog.InfoContext(ctx, "[core.GetJSONTemplateEngine] template is updated, running iterativePreCompile", "templateID", templateID, "template", template, "custom function count", len(customFns.(map[string]any)))
 	err := engine.compiler.Compile(ctx, template)
 	if err != nil {
 		return nil, err
@@ -180,7 +202,7 @@ func createJSONTemplateEngine(ctx context.Context, templateID, template string) 
 	templateIDToCompiledExps.Store(templateID, engine.compiledExps)
 	templateIDToLoopMeta.Store(templateID, engine.loopMetas)
 
-	slog.InfoContext(ctx, "[JSONTemplateEngine.GetJSONTemplateEngine] create JSON template engine success", "templateID", templateID)
+	slog.InfoContext(ctx, "[core.GetJSONTemplateEngine] create JSON template engine success", "templateID", templateID)
 	return engine, nil
 }
 
@@ -191,11 +213,11 @@ func GetJSONTemplateEngineFromContext(ctx context.Context) *JTEngine {
 
 // Run 运行引擎，并且清空引擎状态
 func (e *JTEngine) Run() (string, error) {
-	slog.InfoContext(e.ctx, "[JSONTemplateEngine.Run](trace) Run function start")
+	slog.InfoContext(e.ctx, "[core.Run](trace) Run function start")
 	defer func() {
 		// 清空调用链
 		e.clear()
-		slog.InfoContext(e.ctx, "[JSONTemplateEngine.Run](trace) Run function end")
+		slog.InfoContext(e.ctx, "[core.Run](trace) Run function end")
 	}()
 	return e.keepStatusRun()
 }
@@ -203,7 +225,7 @@ func (e *JTEngine) Run() (string, error) {
 // checkBeforeRun 检查是否有必要的参数
 func (e *JTEngine) checkBeforeRun() error {
 	if e.template == "" {
-		slog.ErrorContext(e.ctx, "[JSONTemplateEngine.check] configJSON is empty")
+		slog.ErrorContext(e.ctx, "[core.checkBeforeRun] configJSON is empty")
 		return werror.ErrTemplateIsEmpty
 	}
 	return nil
@@ -219,7 +241,7 @@ func (e *JTEngine) keepStatusRun() (string, error) {
 		// 恢复局部变量
 		for k, v := range e.localVariables {
 			e.dataset[k] = v
-			slog.InfoContext(e.ctx, fmt.Sprintf("[JSONTemplateEngine.Run] restore variable,\nkey = %s,\nvalue = %v", k, v))
+			slog.InfoContext(e.ctx, fmt.Sprintf("[core.keepStatusRun] restore variable,\nkey = %s,\nvalue = %v", k, v))
 		}
 		e.localVariables = make(map[string]any)
 	}()

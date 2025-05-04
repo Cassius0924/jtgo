@@ -46,7 +46,7 @@ func (p *Parser) Parse(ctx context.Context, template, entry string, target any) 
 	// 获取入口的模板
 	entryTemplateNode := gjson.Get(template, entry)
 	if !entryTemplateNode.Exists() {
-		slog.ErrorContext(ctx, "[JSONTemplateEngine.Run] entry not exists, please check whether entry name exists in the config JSON!", "entry", entry, "template", template)
+		slog.ErrorContext(ctx, "[parser.Parse] entry not exists, please check whether entry name exists in the config JSON!", "entry", entry, "template", template)
 		return "", werror.ErrEntryNotFound
 	}
 
@@ -57,7 +57,7 @@ func (p *Parser) Parse(ctx context.Context, template, entry string, target any) 
 	if target != nil {
 		// 将模板解析结果反序列化给target
 		if err := sonic.UnmarshalString(resultStr, target); err != nil {
-			slog.ErrorContext(ctx, "[JSONTemplateEngine.Run] UnmarshalFromString config error, please check if the template JSON field name matches the target structure field name!", "finalTarget", util.GenerateStructFormatedString(result), "error", err)
+			slog.ErrorContext(ctx, "[parser.Parse] UnmarshalFromString config error, please check if the template JSON field name matches the target structure field name!", "finalTarget", util.GenerateStructFormatedString(result), "error", err)
 			return resultStr, werror.Join(werror.ErrParseToTargetFailed, err)
 		}
 	}
@@ -179,7 +179,7 @@ func (p *Parser) interativeParse(ctx context.Context, templateNode *model.TNode,
 			// 获取关键字处理器并执行处理
 			processor := GetProcessor(keyword)
 			if processor == nil {
-				slog.ErrorContext(ctx, "[JSONTemplateEngine.Run] keyword processor not found", "keyword", keyword)
+				slog.ErrorContext(ctx, "[parser.interativeParse] keyword processor not found", "keyword", keyword)
 				p.err = werror.ErrProcessorNotRegistered
 				return nil
 			}

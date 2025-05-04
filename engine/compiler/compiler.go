@@ -11,7 +11,7 @@ import (
 	"github.com/cassius0924/jtgo/engine/model"
 	"github.com/cassius0924/jtgo/werror"
 	"github.com/expr-lang/expr/vm"
-	"github.com/liyue201/gostl/ds/deque"
+	"github.com/liyue201/gostl/ds/vector"
 	"github.com/tidwall/gjson"
 )
 
@@ -23,7 +23,7 @@ type Compiler struct {
 
 type CompileFrame struct {
 	Node        *model.TNode
-	SubNodeIter *deque.DequeIterator[*ds.Pair[model.TNode, model.TNode]]
+	SubNodeIter *vector.VectorIterator[*ds.Pair[model.TNode, model.TNode]]
 }
 
 func NewCompiler(exprHandler *exprs.ExprHandler) *Compiler {
@@ -58,7 +58,7 @@ func (c *Compiler) iterativeCompile(ctx context.Context, templateNode *model.TNo
 	// 初始化栈，将根节点压入栈中
 	frameStack.Push(&CompileFrame{
 		Node:        templateNode,
-		SubNodeIter: flattenNode(templateNode).First(),
+		SubNodeIter: common.FlattenNode(templateNode).First(),
 	})
 
 	// 迭代处理，直到栈为空
@@ -125,7 +125,7 @@ func (c *Compiler) iterativeCompile(ctx context.Context, templateNode *model.TNo
 			// 如果是对象类型，将其压入栈中继续处理
 			frameStack.Push(&CompileFrame{
 				Node:        &object,
-				SubNodeIter: flattenNode(&object).First(),
+				SubNodeIter: common.FlattenNode(&object).First(),
 			})
 		case object.IsArray():
 			// 如果是数组类型，遍历数组中的每个元素并压入栈中
@@ -133,7 +133,7 @@ func (c *Compiler) iterativeCompile(ctx context.Context, templateNode *model.TNo
 				if value.IsObject() || value.IsArray() {
 					frameStack.Push(&CompileFrame{
 						Node:        &value,
-						SubNodeIter: flattenNode(&value).First(),
+						SubNodeIter: common.FlattenNode(&value).First(),
 					})
 				} else if !value.IsBool() && value.Type != gjson.Number && value.Type != gjson.Null {
 					// 处理字符串类型的值
@@ -158,14 +158,4 @@ func (c *Compiler) GetCompiledExps() map[string]*vm.Program {
 
 func (c *Compiler) GetLoopMetas() map[string]*model.LoopMeta {
 	return c.loopMetas
-}
-
-// TODO: 和parser合并成一个
-func flattenNode(node *model.TNode) *deque.Deque[*ds.Pair[model.TNode, model.TNode]] {
-	var result = ds.NewDeque[*ds.Pair[model.TNode, model.TNode]]()
-	node.ForEach(func(k, v model.TNode) bool {
-		result.PushBack(ds.MakePair(k, v))
-		return true
-	})
-	return result
 }

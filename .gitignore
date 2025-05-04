@@ -120,3 +120,6 @@ fabric.properties
 .copilot-commit-message-instructions.md
 
 example/output_json.json
+
+**/*.prof
+**/*.test

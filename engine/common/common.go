@@ -5,7 +5,7 @@ import (
 
 	"github.com/cassius0924/jtgo/ds"
 	"github.com/cassius0924/jtgo/engine/model"
-	"github.com/liyue201/gostl/ds/deque"
+	"github.com/liyue201/gostl/ds/vector"
 )
 
 // NormalizeFieldName 规范化字段名称
@@ -14,13 +14,13 @@ func NormalizeFieldName(fieldName string) string {
 	return strings.TrimSpace(fieldName)
 }
 
-// FlattenNode 将 model.TNode 节点的所有子节点扁平化为一个双端队列
+// FlattenNode 将模板节点的所有子节点扁平化为一个动态数组
 // TODO: 改成对象池
-func FlattenNode(node *model.TNode) *deque.Deque[*ds.Pair[model.TNode, model.TNode]] {
-	var result = ds.NewDeque[*ds.Pair[model.TNode, model.TNode]]()
-	node.ForEach(func(k, v model.TNode) bool {
-		result.PushBack(ds.MakePair(k, v))
+func FlattenNode(node *model.TNode) *vector.Vector[*ds.Pair[model.TNode, model.TNode]] {
+	var subNodes = ds.NewVectorWithCap[*ds.Pair[model.TNode, model.TNode]](len(node.Map()))
+	node.ForEach(func(key, val model.TNode) bool {
+		subNodes.PushBack(ds.MakePair(key, val))
 		return true
 	})
-	return result
+	return subNodes
 }

@@ -4,7 +4,7 @@ import (
 	"reflect"
 
 	"github.com/cassius0924/jtgo/ds"
-	"github.com/liyue201/gostl/ds/deque"
+	"github.com/liyue201/gostl/ds/vector"
 	"github.com/tidwall/gjson"
 )
 
@@ -19,7 +19,7 @@ type ParseFrame struct {
 	Result     any            // 本帧的解析结果
 	SharedMemo map[string]any // 帧与帧之间的共享备忘录，类似一个全局变量
 
-	SubNodeIter         *deque.DequeIterator[*ds.Pair[TNode, TNode]]
+	SubNodeIter         *vector.VectorIterator[*ds.Pair[TNode, TNode]]
 	CurSubNodeFieldName string
 
 	CondContext *ConditionalContext
