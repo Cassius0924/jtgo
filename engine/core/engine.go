@@ -6,11 +6,11 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/bytedance/sonic"
 	"github.com/cassius0924/jtgo/engine/compiler"
 	"github.com/cassius0924/jtgo/engine/exprs"
 	"github.com/cassius0924/jtgo/engine/model"
 	"github.com/cassius0924/jtgo/engine/runtime/parser"
+	"github.com/cassius0924/jtgo/util"
 	"github.com/cassius0924/jtgo/werror"
 	"github.com/expr-lang/expr/vm"
 	"github.com/samber/lo"
@@ -27,6 +27,7 @@ const (
 )
 
 var (
+	// TODO: 改成缓存gjson的结果，避免每次都要解析
 	templateIDToTemplate     sync.Map // 原始WCC配置，用于感知配置是否更新
 	templateIDToCompiledExps sync.Map // 缓存编译过的表达式集合
 	templateIDToLoopMeta     sync.Map // 缓存循环元数据集合
@@ -105,11 +106,18 @@ func GetJSONTemplateEngine(ctx context.Context, templateID, template string) (*J
 		return nil, werror.ErrTemplateIsEmpty
 	}
 
-	isVaild := isTemplateJSONValid(ctx, template)
+	validateErr := util.ValidateJSON(template)
 	cachedTemplate, _ := templateIDToTemplate.Load(templateID)
 
-	if template == cachedTemplate || !isVaild { // 模板无更新 或 模板格式不合法 则使用缓存
+	if validateErr != nil {
+		slog.ErrorContext(ctx, "[JSONTemplateEngine.GetJSONTemplateEngine] template is invalid JSON", "templateID", templateID, "template", template, "error", validateErr)	
+	}
+
+	if template == cachedTemplate || validateErr != nil { // 模板无更新 或 模板格式不合法 则使用缓存
 		if cachedTemplate == nil {
+			if validateErr != nil {
+				return nil, werror.Join(werror.ErrTemplateIsInvalidJSON, validateErr)
+			}
 			slog.ErrorContext(ctx, "[JSONTemplateEngine.GetJSONTemplateEngine] template is empty", "templateID", templateID)
 			return nil, werror.ErrTemplateIsEmpty
 		}
@@ -179,15 +187,6 @@ func createJSONTemplateEngine(ctx context.Context, templateID, template string) 
 // GetJSONTemplateEngineFromContext 从context中获取JSONTemplateEngine，用于嵌套解析
 func GetJSONTemplateEngineFromContext(ctx context.Context) *JTEngine {
 	return ctx.Value(JSONTemplateEngineCtxKey).(*JTEngine)
-}
-
-// isTemplateJSONValid 检查模板JSON是否合法
-func isTemplateJSONValid(ctx context.Context, template string) bool {
-	valid := sonic.ValidString(template)
-	if !valid {
-		slog.ErrorContext(ctx, "[JSONTemplateEngine.isTemplateJSONValid] template is not a valid json, please check template JSON!", "template", template)
-	}
-	return valid
 }
 
 // Run 运行引擎，并且清空引擎状态

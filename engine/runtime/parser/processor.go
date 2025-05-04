@@ -6,7 +6,6 @@ import (
 
 	"github.com/cassius0924/jtgo/engine/keywords"
 	"github.com/cassius0924/jtgo/engine/model"
-	"github.com/tidwall/gjson"
 )
 
 // KeywordProcessor 关键字处理器接口
@@ -18,7 +17,7 @@ type KeywordProcessor interface {
 	// frame: 当前解析帧
 	// parser: 模板解析器
 	// 返回值指示是否需要继续处理后续节点
-	Process(ctx context.Context, node *gjson.Result, statement string, frame *model.ParseFrame, parser *Parser) bool
+	Process(ctx context.Context, node *model.TNode, statement string, frame *model.ParseFrame, parser *Parser) bool
 }
 
 // BaseProcessor 处理器基础结构

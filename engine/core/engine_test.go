@@ -214,6 +214,48 @@ func TestEngine_ConditionalIfNested(t *testing.T) {
 	})
 }
 
+func TestEngine_ConditionalIfNested2(t *testing.T) {
+	convey.Convey("TestEngine_ConditionalIfNested2", t, func() {
+		tmpl := `
+{
+	"_main_": {
+		"age": 12,
+		"name": {
+			"@if a": {
+				"@if b": "nothing"
+			},
+			"@if a": {
+				"@if a": {
+					"@if b": [
+						"nothing"
+					]
+				}
+			},
+			"@if true": "hello"
+		},
+		"age": 12
+	}
+}
+	`
+		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_ConditionalIfNested2", tmpl)
+		convey.So(err, convey.ShouldBeNil)
+
+		dataset := map[string]any{
+			"a": true,
+			"b": false,
+		}
+
+		result, _ := engine.WithDataset(dataset).Run()
+		convey.So(result, convey.ShouldEqualJSON, `
+{
+	"age": 12,
+	"name": "hello",
+	"age": 12
+}
+	`)
+	})
+}
+
 func TestEngine_ConditionalElif(t *testing.T) {
 	convey.Convey("TestEngine_ConditionalElif", t, func() {
 		tmpl := `

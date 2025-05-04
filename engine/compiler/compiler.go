@@ -22,8 +22,8 @@ type Compiler struct {
 }
 
 type CompileFrame struct {
-	Node        *gjson.Result
-	SubNodeIter *deque.DequeIterator[*ds.Pair[gjson.Result, gjson.Result]]
+	Node        *model.TNode
+	SubNodeIter *deque.DequeIterator[*ds.Pair[model.TNode, model.TNode]]
 }
 
 func NewCompiler(exprHandler *exprs.ExprHandler) *Compiler {
@@ -52,7 +52,7 @@ func (c *Compiler) Compile(ctx context.Context, template string) error {
 }
 
 // iterativeCompile 迭代编译模板
-func (c *Compiler) iterativeCompile(ctx context.Context, templateNode *gjson.Result) error {
+func (c *Compiler) iterativeCompile(ctx context.Context, templateNode *model.TNode) error {
 	var frameStack = ds.NewStack[*CompileFrame]()
 
 	// 初始化栈，将根节点压入栈中
@@ -129,7 +129,7 @@ func (c *Compiler) iterativeCompile(ctx context.Context, templateNode *gjson.Res
 			})
 		case object.IsArray():
 			// 如果是数组类型，遍历数组中的每个元素并压入栈中
-			object.ForEach(func(_, value gjson.Result) bool {
+			object.ForEach(func(_, value model.TNode) bool {
 				if value.IsObject() || value.IsArray() {
 					frameStack.Push(&CompileFrame{
 						Node:        &value,
@@ -161,9 +161,9 @@ func (c *Compiler) GetLoopMetas() map[string]*model.LoopMeta {
 }
 
 // TODO: 和parser合并成一个
-func flattenNode(node *gjson.Result) *deque.Deque[*ds.Pair[gjson.Result, gjson.Result]] {
-	var result = ds.NewDeque[*ds.Pair[gjson.Result, gjson.Result]]()
-	node.ForEach(func(k, v gjson.Result) bool {
+func flattenNode(node *model.TNode) *deque.Deque[*ds.Pair[model.TNode, model.TNode]] {
+	var result = ds.NewDeque[*ds.Pair[model.TNode, model.TNode]]()
+	node.ForEach(func(k, v model.TNode) bool {
 		result.PushBack(ds.MakePair(k, v))
 		return true
 	})

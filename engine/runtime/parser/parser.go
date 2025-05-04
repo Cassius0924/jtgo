@@ -68,7 +68,7 @@ func (p *Parser) Parse(ctx context.Context, template, entry string, target any) 
 // interativeParse 迭代解析方法
 // 通过迭代方式解析JSON模板，将模板转换为最终输出结果
 // templateFieldName: 模板节点的字段名
-func (p *Parser) interativeParse(ctx context.Context, templateNode *gjson.Result, templateFieldName string) any {
+func (p *Parser) interativeParse(ctx context.Context, templateNode *model.TNode, templateFieldName string) any {
 	var (
 		frameStack     = ds.NewStack[*model.ParseFrame]() // 解析帧栈，用于深度优先遍历JSON树
 		result     any = make(map[string]any)             // 初始化结果为空map
@@ -98,13 +98,13 @@ func (p *Parser) interativeParse(ctx context.Context, templateNode *gjson.Result
 	//
 	// 初始化栈，将根节点压入栈中
 	frameStack.Push(&model.ParseFrame{
-		Node:         templateNode,
-		FieldName:    templateFieldName,
-		Target:       result,
-		Result:       result,
-		AssistResult: make(map[string]any, 1),                  // 辅助结果，用于存储临时数据
-		SubNodeIter:  common.FlattenNode(templateNode).First(), // 子节点迭代器
-		ConditionalCtx: &model.ConditionalContext{ // 条件上下文
+		Node:        templateNode,
+		FieldName:   templateFieldName,
+		Target:      result,
+		Result:      result,
+		SharedMemo:  make(map[string]any, 2),
+		SubNodeIter: common.FlattenNode(templateNode).First(), // 子节点迭代器
+		CondContext: &model.ConditionalContext{ // 条件上下文
 			IsMatched: false, // 初始状态未匹配
 		},
 	})
@@ -113,21 +113,25 @@ func (p *Parser) interativeParse(ctx context.Context, templateNode *gjson.Result
 	for frameStack.Size() > 0 {
 		var (
 			frame                 = frameStack.Top() // 获取栈顶帧
-			subNodeField, subNode gjson.Result       // 子节点字段名和子节点
+			subNodeField, subNode model.TNode        // 子节点字段名和子节点
 		)
 
 		// 以下三种情况需要弹出当前帧:
 		// 1. 子节点迭代器无效（已遍历完所有子节点）
 		// 2. 已匹配到条件语句
 		// 3. 存在循环上下文（表示循环已处理完毕）
-		if !frame.SubNodeIter.IsValid() || frame.ConditionalCtx.IsMatched || frame.LoopCtx != nil {
+		if !frame.SubNodeIter.IsValid() || frame.IsConditionalMatched() || frame.HasLoopContext() {
+			if frame.SharedMemo["nomatch"] == true {
+				frame.SharedMemo["nomatch"] = false
+			}
+
 			frameStack.Pop()
 			// 如果栈为空，说明所有帧都已经遍历完毕，处理最终结果并返回
 			if frameStack.Size() == 0 {
 				// 如果当前字段名为空或者是循环结果，则直接返回Result
 				if frame.CurSubNodeFieldName == "" {
 					result = frame.Result
-				} else if frame.LoopCtx != nil && frame.LoopCtx.IsSerialFor {
+				} else if frame.LoopContext != nil && frame.LoopContext.IsSerialFor {
 					result = frame.Result
 				}
 				break
@@ -136,16 +140,19 @@ func (p *Parser) interativeParse(ctx context.Context, templateNode *gjson.Result
 			// 将当前帧的结果传递给父帧
 			if keywords.IsAnyKeyword(frame.FieldName) {
 				// 对于关键字字段，确保辅助结果中存储了当前结果
-				if _, ok := frame.AssistResult["value"]; !ok {
-					frame.AssistResult["value"] = frame.Result
+				if resultMap, ok := frame.Result.(map[string]any); ok && len(resultMap) == 0 {
+					//  如果当前结果为空，则说明父条件语句不成立，通过 nomatch 标记
+					frame.SharedMemo["nomatch"] = true
+				} else if _, ok := frame.SharedMemo["assist_result"]; !ok {
+					frame.SharedMemo["assist_result"] = frame.Result
 				}
 			} else {
 				// 非关键字字段的处理
 				var resultValue any
-				if assistRes, ok := frame.AssistResult["value"]; ok {
+				if assistRes, ok := frame.SharedMemo["assist_result"]; ok {
 					// 如果存在辅助结果，使用辅助结果作为值
 					resultValue = assistRes
-					delete(frame.AssistResult, "value")
+					delete(frame.SharedMemo, "assist_result")
 				} else {
 					resultValue = frame.Result
 				}
@@ -153,6 +160,9 @@ func (p *Parser) interativeParse(ctx context.Context, templateNode *gjson.Result
 				frame.Target.(map[string]any)[frame.FieldName] = resultValue
 			}
 			continue
+		}
+		if frame.SharedMemo["nomatch"] == true {
+			frame.SharedMemo["nomatch"] = false
 		}
 
 		// 取出当前子节点，并将迭代器指向下一个元素
@@ -175,8 +185,8 @@ func (p *Parser) interativeParse(ctx context.Context, templateNode *gjson.Result
 			}
 
 			// 如果处理器返回false，表示不需要继续处理当前节点
-			continueProcess := processor.Process(ctx, &subNode, statement, frame, p)
-			if !continueProcess {
+			processCurrentNode := processor.Process(ctx, &subNode, statement, frame, p)
+			if !processCurrentNode {
 				continue
 			}
 		}
@@ -186,13 +196,13 @@ func (p *Parser) interativeParse(ctx context.Context, templateNode *gjson.Result
 		case subNode.IsObject():
 			// 如果是对象类型，需要创建新的解析帧并压入栈中，继续深度遍历
 			frameStack.Push(&model.ParseFrame{
-				Node:         &subNode,
-				FieldName:    subNodeFieldName,
-				Target:       frame.Result,
-				Result:       make(map[string]any),
-				AssistResult: frame.AssistResult,
-				SubNodeIter:  common.FlattenNode(&subNode).First(),
-				ConditionalCtx: &model.ConditionalContext{
+				Node:        &subNode,
+				FieldName:   subNodeFieldName,
+				Target:      frame.Result,
+				Result:      make(map[string]any),
+				SharedMemo:  frame.SharedMemo,
+				SubNodeIter: common.FlattenNode(&subNode).First(),
+				CondContext: &model.ConditionalContext{
 					IsMatched: false,
 				},
 			})
@@ -201,7 +211,7 @@ func (p *Parser) interativeParse(ctx context.Context, templateNode *gjson.Result
 			// 处理基本类型节点和其他情况
 			if frame.IsConditionalMatched() {
 				// 条件语句匹配成功，使用条件匹配值
-				frame.Result = p.replaceExpression(ctx, frame.ConditionalCtx.MatchedValue)
+				frame.Result = p.replaceExpression(ctx, frame.CondContext.MatchedValue)
 			} else if subNodeFieldName == "" {
 				// 无字段名，直接设置结果
 				frame.Result = p.replaceExpression(ctx, &subNode)
@@ -217,7 +227,7 @@ func (p *Parser) interativeParse(ctx context.Context, templateNode *gjson.Result
 }
 
 // replaceExpression 递归替换 object 中所有含有${Expression}的值
-func (p *Parser) replaceExpression(ctx context.Context, input *gjson.Result) any {
+func (p *Parser) replaceExpression(ctx context.Context, input *model.TNode) any {
 	if input == nil || !input.Exists() {
 		return nil
 	}
@@ -230,7 +240,7 @@ func (p *Parser) replaceExpression(ctx context.Context, input *gjson.Result) any
 			isExpression    bool
 		)
 
-		input.ForEach(func(field, node gjson.Result) bool {
+		input.ForEach(func(field, node model.TNode) bool {
 			fieldName := common.NormalizeFieldName(field.String())
 
 			switch keyword, _ := keywords.DetectKeyword(fieldName); keyword {

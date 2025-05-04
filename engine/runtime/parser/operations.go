@@ -17,13 +17,13 @@ import (
 )
 
 // execOperations 处理DO操作
-func (p *Parser) execOperations(ctx context.Context, node *gjson.Result) {
+func (p *Parser) execOperations(ctx context.Context, node *model.TNode) {
 	if !node.Exists() {
 		return
 	}
 	switch {
 	case node.IsArray(): // 是数组，则遍历处理
-		node.ForEach(func(_, value gjson.Result) bool {
+		node.ForEach(func(_, value model.TNode) bool {
 			if value.Type != gjson.String {
 				return true
 			}
@@ -32,7 +32,7 @@ func (p *Parser) execOperations(ctx context.Context, node *gjson.Result) {
 			return true
 		})
 	case node.IsObject():
-		node.ForEach(func(key, value gjson.Result) bool {
+		node.ForEach(func(key, value model.TNode) bool {
 			// key是表达式，value是操作
 			keyName := common.NormalizeFieldName(key.String())
 			expression, isExpression := exprs.ExtractExpression(keyName)
@@ -60,14 +60,14 @@ func (p *Parser) execOperations(ctx context.Context, node *gjson.Result) {
 	}
 }
 
-func (p *Parser) returnResult(ctx context.Context, node *gjson.Result) any {
+func (p *Parser) returnResult(ctx context.Context, node *model.TNode) any {
 	result := p.replaceExpression(ctx, node)
 	slog.InfoContext(ctx, fmt.Sprintf("[JSONTemplateEngine.returnResult](trace) return result,\nresult = %s", util.GenerateStructFormatedString(result)))
 	return result
 }
 
 // varAssignment 处理VAR变量赋值
-func (p *Parser) varAssignment(ctx context.Context, node *gjson.Result) {
+func (p *Parser) varAssignment(ctx context.Context, node *model.TNode) {
 	if !node.Exists() {
 		return
 	}
@@ -75,7 +75,7 @@ func (p *Parser) varAssignment(ctx context.Context, node *gjson.Result) {
 	switch {
 	// 只有Object类型才能进行变量赋值，其他类型均属于语法错误
 	case node.IsObject():
-		node.ForEach(func(key, value gjson.Result) bool {
+		node.ForEach(func(key, value model.TNode) bool {
 			// key是变量名或表达式，value是变量值
 			keyName := common.NormalizeFieldName(key.String())
 			expression, isExpression := exprs.ExtractExpression(keyName)
@@ -117,7 +117,7 @@ func (p *Parser) varAssignment(ctx context.Context, node *gjson.Result) {
 }
 
 // judgeConditionalIf 处理if条件判断，返回是否命中该条件
-func (p *Parser) judgeConditionalIf(ctx context.Context, node *gjson.Result, expression string, frame *model.ParseFrame) bool {
+func (p *Parser) judgeConditionalIf(ctx context.Context, node *model.TNode, expression string, frame *model.ParseFrame) bool {
 	// 表达式计算为bool值
 	matched, err := p.exprHandler.EvaluateExpressionToBool(ctx, p.compiledExps, expression)
 	if err != nil {
@@ -126,43 +126,43 @@ func (p *Parser) judgeConditionalIf(ctx context.Context, node *gjson.Result, exp
 
 	// 表达式为true，替换值，并剪枝结束循环
 	if matched {
-		frame.ConditionalCtx.MatchedValue = node
-		frame.ConditionalCtx.IsMatched = true
+		frame.CondContext.MatchedValue = node
+		frame.CondContext.IsMatched = true
 	}
 
-	frame.ConditionalCtx.HasIfBranch = true
+	frame.CondContext.HasIfBranch = true
 	slog.InfoContext(ctx, fmt.Sprintf("[JSONTemplateEngine.judgeConditionalIf](trace) condition evaluate result,\nkey = %s,\nvalue = %s,\nexpr = %s", frame.FieldName, node.String(), expression))
 	return matched
 }
 
 // judgeConditionalElif 处理elif条件判断，返回是否命中该条件
-func (p *Parser) judgeConditionalElif(ctx context.Context, node *gjson.Result, expression string, frame *model.ParseFrame) bool {
+func (p *Parser) judgeConditionalElif(ctx context.Context, node *model.TNode, expression string, frame *model.ParseFrame) bool {
 	return p.judgeConditionalIf(ctx, node, expression, frame)
 }
 
 // judgeConditionalElse 处理else条件判断
-func (p *Parser) judgeConditionalElse(ctx context.Context, node *gjson.Result, frame *model.ParseFrame) bool {
+func (p *Parser) judgeConditionalElse(ctx context.Context, node *model.TNode, frame *model.ParseFrame) bool {
 	// 判断当前 else 是否是孤儿else，即当前 else 是否属于某一个 if
 	// TODO: 封装成函数
-	if !frame.ConditionalCtx.HasIfBranch {
+	if !frame.CondContext.HasIfBranch {
 		// 是孤儿 else 则视为 false
 		slog.WarnContext(ctx, "[JSONTemplateEngine.judgeConditionalElse] this else is orphan, please check if the else belongs to an if!", "key", frame.FieldName)
 		return false
 	}
 
-	frame.ConditionalCtx.MatchedValue = node
-	frame.ConditionalCtx.IsMatched = true
+	frame.CondContext.MatchedValue = node
+	frame.CondContext.IsMatched = true
 
 	// 重置条件分支的情况
-	frame.ConditionalCtx.ResetBranchs()
+	frame.CondContext.ResetBranchs()
 	slog.InfoContext(ctx, fmt.Sprintf("[JSONTemplateEngine.judgeConditionalIf](trace) condition evaluate result,\nkey = %s,\nvalue = %s", frame.FieldName, node.String()))
 	return true
 }
 
 // executeLoop 处理for循环
-func (p *Parser) executeLoop(ctx context.Context, node *gjson.Result, statement string, frame *model.ParseFrame) {
+func (p *Parser) executeLoop(ctx context.Context, node *model.TNode, statement string, frame *model.ParseFrame) {
 	// 如果循环上下文不存在，则是第一次执行循环，进行初始化
-	if frame.LoopCtx == nil {
+	if frame.LoopContext == nil {
 		err := p.initLoopContext(ctx, statement, frame)
 		if err != nil {
 			p.err = err
@@ -171,7 +171,7 @@ func (p *Parser) executeLoop(ctx context.Context, node *gjson.Result, statement 
 	}
 
 	var (
-		loopCtx  = frame.LoopCtx
+		loopCtx  = frame.LoopContext
 		loopMeta = loopCtx.Meta
 		result   []any
 	)
@@ -240,7 +240,7 @@ func (p *Parser) executeLoop(ctx context.Context, node *gjson.Result, statement 
 
 // initLoopContext 初始化循环上下文
 func (p *Parser) initLoopContext(ctx context.Context, statement string, frame *model.ParseFrame) error {
-	frame.LoopCtx = model.NewLoopContext()
+	frame.LoopContext = model.NewLoopContext()
 	// 取出编译期解析的循环元数据
 	loopMeta, ok := p.loopMetas[statement]
 	if !ok {
@@ -278,17 +278,17 @@ func (p *Parser) initLoopContext(ctx context.Context, statement string, frame *m
 		return werror.ErrLoopObjectNotRangeable
 	}
 
-	frame.LoopCtx.Meta = loopMeta
-	frame.LoopCtx.Object = object
-	frame.LoopCtx.ObjectRefl = ptr.Of(objectRefl)
-	frame.LoopCtx.Type = loopType
-	frame.LoopCtx.MapIter = mapIter
-	frame.LoopCtx.Length = length
-	frame.LoopCtx.IsSerialFor = keywords.IsForStatement(frame.FieldName)
+	frame.LoopContext.Meta = loopMeta
+	frame.LoopContext.Object = object
+	frame.LoopContext.ObjectRefl = ptr.Of(objectRefl)
+	frame.LoopContext.Type = loopType
+	frame.LoopContext.MapIter = mapIter
+	frame.LoopContext.Length = length
+	frame.LoopContext.IsSerialFor = keywords.IsForStatement(frame.FieldName)
 	return nil
 }
 
 // continueLoop 处理循环中的CONTINUE
-func (p *Parser) continueLoop(ctx context.Context, node *gjson.Result, frame *model.ParseFrame) {
+func (p *Parser) continueLoop(ctx context.Context, node *model.TNode, frame *model.ParseFrame) {
 
 }

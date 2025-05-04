@@ -8,30 +8,35 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+// TNode TemplateNode 代表一个模板节点
+type TNode = gjson.Result
+
 // ParseFrame 模板引擎解析帧
 type ParseFrame struct {
-	Node                *gjson.Result
-	FieldName           string
-	Target              any            //
-	Result              any            // 本帧的解析结果
-	AssistResult        map[string]any // 辅助结果，主要用于存储条件判断的结果
-	SubNodeIter         *deque.DequeIterator[*ds.Pair[gjson.Result, gjson.Result]]
+	Node       *TNode
+	FieldName  string
+	Target     any
+	Result     any            // 本帧的解析结果
+	SharedMemo map[string]any // 帧与帧之间的共享备忘录，类似一个全局变量
+
+	SubNodeIter         *deque.DequeIterator[*ds.Pair[TNode, TNode]]
 	CurSubNodeFieldName string
 
-	ConditionalCtx *ConditionalContext
-	LoopCtx        *LoopContext
+	CondContext *ConditionalContext
+	LoopContext *LoopContext
 }
 
 func (f *ParseFrame) IsConditionalMatched() bool {
-	if f == nil {
-		return false
-	}
-	return f.ConditionalCtx != nil && f.ConditionalCtx.IsMatched
+	return f.CondContext != nil && f.CondContext.IsMatched && !(f.SharedMemo["nomatch"] == true)
+}
+
+func (f *ParseFrame) HasLoopContext() bool {
+	return f.LoopContext != nil
 }
 
 // ConditionalContext 条件判断上下文
 type ConditionalContext struct {
-	MatchedValue  *gjson.Result
+	MatchedValue  *TNode
 	IsMatched     bool
 	HasIfBranch   bool // 是否有if分支
 	HasElseBranch bool // 是否有else分支

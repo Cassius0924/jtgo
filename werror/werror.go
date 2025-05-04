@@ -9,6 +9,8 @@ var (
 	ErrEntryNotFound = errors.New("entry of template not found")
 	// ErrTemplateIsEmpty 模板为空
 	ErrTemplateIsEmpty = errors.New("JSON template is empty")
+	// ErrTemplateIsInvalidJSON 模板不是合法的JSON
+	ErrTemplateIsInvalidJSON = errors.New("JSON template is invalid JSON")
 	// ErrTemplateIDIsEmpty 模板ID为空
 	ErrTemplateIDIsEmpty = errors.New("JSON template ID is empty")
 	// ErrTargetIsNil 模板引擎解析目标为空
@@ -27,7 +29,7 @@ var (
 	ErrProcessorNotRegistered = errors.New("processor not registered")
 )
 
-// 合并错误
+// Join 合并错误
 func Join(err1, err2 error) error {
 	return errors.Join(err1, err2)
 }
