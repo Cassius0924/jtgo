@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/samber/lo"
-	"github.com/smartystreets/goconvey/convey"
+	. "github.com/smartystreets/goconvey/convey"
 )
 
 type SubTestObj struct {
@@ -36,7 +36,7 @@ type TestObj struct {
 }
 
 func TestEngine_Simple(t *testing.T) {
-	convey.Convey("TestEngine_ConditionalIf", t, func() {
+	Convey("TestEngine_ConditionalIf", t, func() {
 		tmpl := `
 {
 	"_main_": {
@@ -51,7 +51,7 @@ func TestEngine_Simple(t *testing.T) {
 }
 	`
 		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_ConditionalIf", tmpl)
-		convey.So(err, convey.ShouldBeNil)
+		So(err, ShouldBeNil)
 
 		dataset := map[string]any{
 			"a": true,
@@ -60,7 +60,7 @@ func TestEngine_Simple(t *testing.T) {
 
 		result, _ := engine.WithDataset(dataset).Run()
 
-		convey.So(result, convey.ShouldEqualJSON, `
+		So(result, ShouldEqualJSON, `
 {
 	"name": true,
 	"age": 18,
@@ -76,7 +76,7 @@ func TestEngine_Simple(t *testing.T) {
 }
 
 func TestEngine_ConditionalIf(t *testing.T) {
-	convey.Convey("TestEngine_ConditionalIf", t, func() {
+	Convey("TestEngine_ConditionalIf", t, func() {
 		tmpl := `
 {
 	"_main_": {
@@ -89,7 +89,7 @@ func TestEngine_ConditionalIf(t *testing.T) {
 }
 	`
 		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_ConditionalIf", tmpl)
-		convey.So(err, convey.ShouldBeNil)
+		So(err, ShouldBeNil)
 
 		dataset := map[string]any{
 			"a": true,
@@ -97,7 +97,7 @@ func TestEngine_ConditionalIf(t *testing.T) {
 
 		result, _ := engine.WithDataset(dataset).Run()
 
-		convey.So(result, convey.ShouldEqualJSON, `
+		So(result, ShouldEqualJSON, `
 {
 	"name": {
 		"sub_name": "hello"
@@ -109,7 +109,7 @@ func TestEngine_ConditionalIf(t *testing.T) {
 }
 
 func TestEngine_ConditionalIf2(t *testing.T) {
-	convey.Convey("TestEngine_ConditionalIf2", t, func() {
+	Convey("TestEngine_ConditionalIf2", t, func() {
 		{
 			tmpl := `
 {
@@ -123,7 +123,7 @@ func TestEngine_ConditionalIf2(t *testing.T) {
 }
 	`
 			engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_ConditionalIf2", tmpl)
-			convey.So(err, convey.ShouldBeNil)
+			So(err, ShouldBeNil)
 
 			dataset := map[string]any{
 				"a": true,
@@ -132,13 +132,13 @@ func TestEngine_ConditionalIf2(t *testing.T) {
 			target := &TestObj{}
 			_, _ = engine.WithDataset(dataset).ParseTo(target).Run()
 
-			convey.So(target.Name, convey.ShouldEqual, "hello")
+			So(target.Name, ShouldEqual, "hello")
 		}
 	})
 }
 
 func TestEngine_ConditionalIf3(t *testing.T) {
-	convey.Convey("TestEngine_ConditionalIf3", t, func() {
+	Convey("TestEngine_ConditionalIf3", t, func() {
 		tmpl := `
 {
 	"_main_": {
@@ -151,7 +151,7 @@ func TestEngine_ConditionalIf3(t *testing.T) {
 }
 	`
 		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_ConditionalIf3", tmpl)
-		convey.So(err, convey.ShouldBeNil)
+		So(err, ShouldBeNil)
 
 		dataset := map[string]any{
 			"a": true,
@@ -159,7 +159,7 @@ func TestEngine_ConditionalIf3(t *testing.T) {
 
 		result, _ := engine.WithDataset(dataset).Run()
 
-		convey.So(result, convey.ShouldEqualJSON, `
+		So(result, ShouldEqualJSON, `
 {
 	"name": {
 		"actual": "hello"
@@ -171,7 +171,7 @@ func TestEngine_ConditionalIf3(t *testing.T) {
 }
 
 func TestEngine_ConditionalIfNested(t *testing.T) {
-	convey.Convey("TestEngine_ConditionalIfNested", t, func() {
+	Convey("TestEngine_ConditionalIfNested", t, func() {
 		tmpl := `
 {
 	"_main_": {
@@ -194,7 +194,7 @@ func TestEngine_ConditionalIfNested(t *testing.T) {
 }
 	`
 		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_ConditionalIfNested", tmpl)
-		convey.So(err, convey.ShouldBeNil)
+		So(err, ShouldBeNil)
 
 		dataset := map[string]any{
 			"a": true,
@@ -204,7 +204,7 @@ func TestEngine_ConditionalIfNested(t *testing.T) {
 		}
 
 		result, _ := engine.WithDataset(dataset).Run()
-		convey.So(result, convey.ShouldEqualJSON, `
+		So(result, ShouldEqualJSON, `
 {
 	"count": 100,
 	"age": 12,
@@ -215,7 +215,7 @@ func TestEngine_ConditionalIfNested(t *testing.T) {
 }
 
 func TestEngine_ConditionalIfNested2(t *testing.T) {
-	convey.Convey("TestEngine_ConditionalIfNested2", t, func() {
+	Convey("TestEngine_ConditionalIfNested2", t, func() {
 		tmpl := `
 {
 	"_main_": {
@@ -238,7 +238,7 @@ func TestEngine_ConditionalIfNested2(t *testing.T) {
 }
 	`
 		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_ConditionalIfNested2", tmpl)
-		convey.So(err, convey.ShouldBeNil)
+		So(err, ShouldBeNil)
 
 		dataset := map[string]any{
 			"a": true,
@@ -246,7 +246,7 @@ func TestEngine_ConditionalIfNested2(t *testing.T) {
 		}
 
 		result, _ := engine.WithDataset(dataset).Run()
-		convey.So(result, convey.ShouldEqualJSON, `
+		So(result, ShouldEqualJSON, `
 {
 	"age": 12,
 	"name": "hello",
@@ -257,7 +257,7 @@ func TestEngine_ConditionalIfNested2(t *testing.T) {
 }
 
 func TestEngine_ConditionalElif(t *testing.T) {
-	convey.Convey("TestEngine_ConditionalElif", t, func() {
+	Convey("TestEngine_ConditionalElif", t, func() {
 		tmpl := `
 {
 	"_main_": {
@@ -270,7 +270,7 @@ func TestEngine_ConditionalElif(t *testing.T) {
 }
 	`
 		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_ConditionalElif", tmpl)
-		convey.So(err, convey.ShouldBeNil)
+		So(err, ShouldBeNil)
 
 		dataset := map[string]any{
 			"a": false,
@@ -281,12 +281,12 @@ func TestEngine_ConditionalElif(t *testing.T) {
 		target := &TestObj{}
 		_, _ = engine.WithDataset(dataset).ParseTo(target).Run()
 
-		convey.So(target.Name, convey.ShouldEqual, "hello")
+		So(target.Name, ShouldEqual, "hello")
 	})
 }
 
 func TestEngine_ConditionalElifNested(t *testing.T) {
-	convey.Convey("TestEngine_ConditionalElifNested", t, func() {
+	Convey("TestEngine_ConditionalElifNested", t, func() {
 		tmpl := `
 {
 	"_main_": {
@@ -303,7 +303,7 @@ func TestEngine_ConditionalElifNested(t *testing.T) {
 }
 	`
 		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_ConditionalElifNested", tmpl)
-		convey.So(err, convey.ShouldBeNil)
+		So(err, ShouldBeNil)
 
 		dataset := map[string]any{
 			"a": false,
@@ -314,18 +314,18 @@ func TestEngine_ConditionalElifNested(t *testing.T) {
 		target := &TestObj{}
 		result, _ := engine.WithDataset(dataset).ParseTo(target).Run()
 
-		convey.So(result, convey.ShouldEqualJSON, `
+		So(result, ShouldEqualJSON, `
 {
 	"name": "hello"
 }
 	`)
-		convey.So(target.Name, convey.ShouldEqual, "hello")
+		So(target.Name, ShouldEqual, "hello")
 
 	})
 }
 
 func TestEngine_ConditionalElse(t *testing.T) {
-	convey.Convey("TestEngine_ConditionalElse", t, func() {
+	Convey("TestEngine_ConditionalElse", t, func() {
 		tmpl := `
 {
 	"_main_": {
@@ -339,7 +339,7 @@ func TestEngine_ConditionalElse(t *testing.T) {
 }
 	`
 		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_ConditionalElse", tmpl)
-		convey.So(err, convey.ShouldBeNil)
+		So(err, ShouldBeNil)
 
 		dataset := map[string]any{
 			"a": false,
@@ -348,18 +348,18 @@ func TestEngine_ConditionalElse(t *testing.T) {
 		target := &TestObj{}
 		result, _ := engine.WithDataset(dataset).ParseTo(target).Run()
 
-		convey.So(result, convey.ShouldEqualJSON, `
+		So(result, ShouldEqualJSON, `
 {
 	"name": "hello"
 }
 	`)
-		convey.So(target.Name, convey.ShouldEqual, "hello")
+		So(target.Name, ShouldEqual, "hello")
 
 	})
 }
 
 func TestEngine_LoopArray(t *testing.T) {
-	convey.Convey("TestEngine_Loop", t, func() {
+	Convey("TestEngine_Loop", t, func() {
 		tmpl := `
 {
 	"_main_": {
@@ -372,7 +372,7 @@ func TestEngine_LoopArray(t *testing.T) {
 }
 	`
 		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_Loop", tmpl)
-		convey.So(err, convey.ShouldBeNil)
+		So(err, ShouldBeNil)
 
 		dataset := map[string]any{
 			"a": [3]string{
@@ -384,7 +384,7 @@ func TestEngine_LoopArray(t *testing.T) {
 
 		result, _ := engine.WithDataset(dataset).Run()
 
-		convey.So(result, convey.ShouldEqualJSON, `
+		So(result, ShouldEqualJSON, `
 {
 	"sub_test_list": [
 		{
@@ -403,7 +403,7 @@ func TestEngine_LoopArray(t *testing.T) {
 }
 
 func TestEngine_LoopSlice(t *testing.T) {
-	convey.Convey("TestEngine_LoopSlice", t, func() {
+	Convey("TestEngine_LoopSlice", t, func() {
 		tmpl := `
 {
 	"_main_": {
@@ -416,7 +416,7 @@ func TestEngine_LoopSlice(t *testing.T) {
 }
 	`
 		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_LoopSlice", tmpl)
-		convey.So(err, convey.ShouldBeNil)
+		So(err, ShouldBeNil)
 
 		dataset := map[string]any{
 			"b": []string{
@@ -429,7 +429,7 @@ func TestEngine_LoopSlice(t *testing.T) {
 
 		result, _ := engine.WithDataset(dataset).Run()
 
-		convey.So(result, convey.ShouldEqualJSON, `
+		So(result, ShouldEqualJSON, `
 {
 	"sub_test_list": [
 		{
@@ -451,11 +451,11 @@ func TestEngine_LoopSlice(t *testing.T) {
 }
 
 func TestEngine_LoopMap(t *testing.T) {
-	convey.Convey("TestEngine_LoopMap", t, func() {
+	Convey("TestEngine_LoopMap", t, func() {
 		tmpl := `
 {
 	"_main_": {
-		"sub_test_list": {
+		"name_list": {
 			"@for key,val := a": {
 				"name": "${key}_${val}"
 			},
@@ -465,7 +465,7 @@ func TestEngine_LoopMap(t *testing.T) {
 }
 	`
 		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_LoopMap", tmpl)
-		convey.So(err, convey.ShouldBeNil)
+		So(err, ShouldBeNil)
 
 		dataset := map[string]any{
 			"a": map[string]string{
@@ -474,25 +474,38 @@ func TestEngine_LoopMap(t *testing.T) {
 			},
 		}
 
-		result, _ := engine.WithDataset(dataset).Run()
+		var result map[string]any
+		_, _ = engine.WithDataset(dataset).ParseTo(&result).Run()
 
-		convey.So(result, convey.ShouldEqualJSON, `
-{
-	"sub_test_list": [
-		{
-			"name": "hello_world"
-		},
-		{
-			"name": "hi_golang"
+		// 验证结果结构是否正确
+		So(result, ShouldNotBeNil)
+		So(result["name_list"], ShouldHaveSameTypeAs, []any{})
+
+		nameList, _ := result["name_list"].([]any)
+		So(len(nameList), ShouldEqual, 2) // 应该有2个元素 (map a的长度)
+
+		// 检查所有可能的组合是否存在
+		expectedCombinations := map[string]bool{
+			"hello_world": false,
+			"hi_golang":   false,
 		}
-	]
-}
-		`)
+
+		// 收集所有name值
+		for _, item := range nameList {
+			nameMap := item.(map[string]any)
+			name, _ := nameMap["name"].(string)
+			expectedCombinations[name] = true
+		}
+
+		// 验证所有期望的组合都存在
+		for _, found := range expectedCombinations {
+			So(found, ShouldBeTrue)
+		}
 	})
 }
 
 func TestEngine_LoopMapNoObject(t *testing.T) {
-	convey.Convey("TestEngine_LoopMap", t, func() {
+	Convey("TestEngine_LoopMapNoObject", t, func() {
 		tmpl := `
 {
 	"_main_": {
@@ -502,8 +515,8 @@ func TestEngine_LoopMapNoObject(t *testing.T) {
 	}
 }
 	`
-		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_LoopMap", tmpl)
-		convey.So(err, convey.ShouldBeNil)
+		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_LoopMapNoObject", tmpl)
+		So(err, ShouldBeNil)
 
 		dataset := map[string]any{
 			"a": map[string]string{
@@ -512,25 +525,41 @@ func TestEngine_LoopMapNoObject(t *testing.T) {
 			},
 		}
 
-		result, _ := engine.WithDataset(dataset).Run()
+		var result map[string]any
+		_, _ = engine.WithDataset(dataset).ParseTo(&result).Run()
 
-		convey.So(result, convey.ShouldEqualJSON, `
-{
-	"name_list": [
-		"world",
-		"golang"
-	]
-}
-		`)
+		// 验证结果结构是否正确
+		So(result, ShouldNotBeNil)
+		So(result["name_list"], ShouldHaveSameTypeAs, []any{})
+
+		nameList, _ := result["name_list"].([]any)
+		So(len(nameList), ShouldEqual, 2) // 应该有2个元素 (map a的长度)
+
+		// 检查所有可能的值是否存在
+		expectedValues := map[string]bool{
+			"world":  false,
+			"golang": false,
+		}
+
+		// 收集所有值
+		for _, val := range nameList {
+			strVal, _ := val.(string)
+			expectedValues[strVal] = true
+		}
+
+		// 验证所有期望的值都存在
+		for _, found := range expectedValues {
+			So(found, ShouldBeTrue)
+		}
 	})
 }
 
 func TestEngine_LoopMapNested(t *testing.T) {
-	convey.Convey("TestEngine_LoopMapNested", t, func() {
+	Convey("TestEngine_LoopMapNested", t, func() {
 		tmpl := `
 {
 	"_main_": {
-		"sub_test_list": {
+		"name_list": {
 			"@for key,val := a": {
 				"@for key2,val2 := b": {
 					"name": "${key}_${val}_${key2}_${val2}"
@@ -541,7 +570,7 @@ func TestEngine_LoopMapNested(t *testing.T) {
 }
 	`
 		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_LoopMapNested", tmpl)
-		convey.So(err, convey.ShouldBeNil)
+		So(err, ShouldBeNil)
 
 		dataset := map[string]any{
 			"a": map[string]string{
@@ -554,35 +583,52 @@ func TestEngine_LoopMapNested(t *testing.T) {
 			},
 		}
 
-		result, _ := engine.WithDataset(dataset).Run()
+		var result map[string]any
+		_, _ = engine.WithDataset(dataset).ParseTo(&result).Run()
 
-		convey.So(result, convey.ShouldEqualJSON, `
-{
-	"sub_test_list": [
-		[
-			{
-				"name": "hello_world_json_template"
-			},	
-			{
-				"name": "hello_world_with_go"
+		// 验证结果结构是否正确
+		So(result, ShouldNotBeNil)
+		So(result["name_list"], ShouldHaveSameTypeAs, []any{})
+
+		nameList, _ := result["name_list"].([]any)
+		So(len(nameList), ShouldEqual, 2) // 应该有2个元素 (a的长度)
+
+		// 验证每个元素是数组且长度为2 (b的长度)
+		for _, item := range nameList {
+			innerList, ok := item.([]any)
+			So(ok, ShouldBeTrue)
+			So(len(innerList), ShouldEqual, 2)
+		}
+
+		// 检查所有可能的组合是否存在
+		expectedCombinations := []string{
+			"hello_world_json_template",
+			"hello_world_with_go",
+			"hi_golang_json_template",
+			"hi_golang_with_go",
+		}
+
+		foundCombinations := map[string]bool{}
+
+		// 收集所有name值
+		for _, outerItem := range nameList {
+			innerList := outerItem.([]any)
+			for _, innerItem := range innerList {
+				nameMap := innerItem.(map[string]any)
+				name, _ := nameMap["name"].(string)
+				foundCombinations[name] = true
 			}
-		],
-		[
-			{
-				"name": "hi_golang_json_template"
-			},
-			{
-				"name": "hi_golang_with_go"
-			}
-		]
-	]
-}
-		`)
+		}
+
+		// 验证所有期望的组合都存在
+		for _, expected := range expectedCombinations {
+			So(foundCombinations[expected], ShouldBeTrue)
+		}
 	})
 }
 
 func TestEngine_LoopSliceNested(t *testing.T) {
-	convey.Convey("TestEngine_LoopSliceNested", t, func() {
+	Convey("TestEngine_LoopSliceNested", t, func() {
 		tmpl := `
 {
 	"_main_": {
@@ -597,7 +643,7 @@ func TestEngine_LoopSliceNested(t *testing.T) {
 }
 	`
 		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_LoopSliceNested", tmpl)
-		convey.So(err, convey.ShouldBeNil)
+		So(err, ShouldBeNil)
 
 		dataset := map[string]any{
 			"a": []string{
@@ -610,7 +656,7 @@ func TestEngine_LoopSliceNested(t *testing.T) {
 		}
 
 		result, _ := engine.WithDataset(dataset).Run()
-		convey.So(result, convey.ShouldEqualJSON, `
+		So(result, ShouldEqualJSON, `
 {
 	"sub_test_list": [
 		[
@@ -628,7 +674,7 @@ func TestEngine_LoopSliceNested(t *testing.T) {
 }
 
 func TestEngine_Comment(t *testing.T) {
-	convey.Convey("TestEngine_Comment", t, func() {
+	Convey("TestEngine_Comment", t, func() {
 		tmpl := `
 {
 	"_main_": {
@@ -648,7 +694,7 @@ func TestEngine_Comment(t *testing.T) {
 }
 `
 		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_Comment", tmpl)
-		convey.So(err, convey.ShouldBeNil)
+		So(err, ShouldBeNil)
 
 		dataset := map[string]any{
 			"a": true,
@@ -656,7 +702,7 @@ func TestEngine_Comment(t *testing.T) {
 
 		result, _ := engine.WithDataset(dataset).Run()
 
-		convey.So(result, convey.ShouldEqualJSON, `
+		So(result, ShouldEqualJSON, `
 {
 	"name": "hello"
 }
@@ -666,21 +712,24 @@ func TestEngine_Comment(t *testing.T) {
 }
 
 func TestEngine_ComplexTemplate(t *testing.T) {
-	convey.Convey("TestEngine_ComplexTemplate", t, func() {
+	Convey("TestEngine_ComplexTemplate", t, func() {
 		tmpl := `
 {
     "_main_": {
 		"users": {
 			"@cmt": "this is a comment",
-			"@cmt": 2,
-			"@cmt": true,
+			"@cmt": ["this is a comment", "this is a comment too"],
             "@for idx,user := userList": {
 				"@cmt": "this is a comment",
 				"num": "${idx + 1}",
                 "name": "${user.first_name} ${user.last_name}",
                 "age_group": {
+                    "@if user.age < 0": {
+						"@if user.age == -1": "unknown",
+						"@else": "invalid"
+					},
                     "@if user.age < 18": {
-						"@if user.age < 12": "teenager",
+						"@if user.age < 12": "kid",
 						"@else": "teenager"
 					},
                     "@elif user.age < 60": "adult",
@@ -724,12 +773,12 @@ func TestEngine_ComplexTemplate(t *testing.T) {
 		}
 
 		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_ComplexTemplate", tmpl)
-		convey.So(err, convey.ShouldBeNil)
+		So(err, ShouldBeNil)
 
 		result, _ := engine.WithDataset(dataset).Run()
 		fmt.Println(result)
 
-		convey.So(result, convey.ShouldEqualJSON, `
+		So(result, ShouldEqualJSON, `
 {
     "users": [
         {
@@ -759,7 +808,7 @@ func TestEngine_ComplexTemplate(t *testing.T) {
 		{
 			"num": 4,
 			"name": "Baby S",
-			"age_group": "teenager",
+			"age_group": "kid",
 			"tags": [3, 2],
 			"score": 20,
 			"status": "active"
