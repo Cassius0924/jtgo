@@ -715,6 +715,9 @@ func TestEngine_Var(t *testing.T) {
 		tmpl := `
 {
 	"_main_": {
+		"@var": {
+			"e": "ines"
+		},
 		"name": {
 			"@var": {
 				"a": "hello",
@@ -722,7 +725,7 @@ func TestEngine_Var(t *testing.T) {
 				"c": "num_${x + y}",
 				"d": false
 			},
-			"value": "${a}_${b}_${c}_${d}"
+			"value": "${a}_${b}_${c}_${d}_${e}"
 		}
 	}
 }
@@ -741,7 +744,7 @@ func TestEngine_Var(t *testing.T) {
 		So(result, ShouldEqualJSON, `
 {
 	"name": {
-		"value": "hello_1_num_3.2_false"
+		"value": "hello_1_num_3.2_false_ines"
 	}
 }
 `)
@@ -759,6 +762,9 @@ func TestEngine_VarWithIf(t *testing.T) {
 			"@var": {
 				"@if noExist": {
 					"y": "nothing"
+				},
+				"@if true": {
+					"d": "one"
 				},
 				"a": false,
 				"@if a": {
@@ -781,7 +787,7 @@ func TestEngine_VarWithIf(t *testing.T) {
 					"x": "nothing"
 				}
 			},
-			"value": "${a}_${b}_${c}_${x}_${y}_${z}"
+			"value": "${a}_${b}_${c}_${d}_${x}_${y}_${z}"
 		}
 	}
 }
@@ -796,7 +802,7 @@ func TestEngine_VarWithIf(t *testing.T) {
 		So(result, ShouldEqualJSON, `
 {
 	"name": {
-		"value": "false_world_json___"
+		"value": "false_world_json_one___"
 	}
 }
 `)

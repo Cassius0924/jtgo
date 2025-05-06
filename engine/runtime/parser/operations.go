@@ -69,6 +69,7 @@ func (p *Parser) returnResult(ctx context.Context, node *model.TNode) any {
 // assignVariables 处理VAR变量赋值
 func (p *Parser) assignVariables(ctx context.Context, node *model.TNode, frame *model.ParseFrame) bool {
 	frame.SharedMemo["var_assigning"] = true
+	slog.InfoContext(ctx, fmt.Sprintf("[parser.assignVariables](trace) start assign variables,\nkey = %s,\nvalue = %s", frame.FieldName, node.String()))
 	return true
 }
 
