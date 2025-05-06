@@ -29,6 +29,11 @@ func NewStack[T any]() *stack.Stack[T] {
 	return stack.New[T]()
 }
 
+// NewStackWithListContainer 创建栈，使用双向链表作为底层容器
+func NewStackWithListContainer[T any]() *stack.Stack[T] {
+	return stack.New(stack.WithListContainer[T]())
+}
+
 // NewSet 创建集合
 func NewSet[T any](cmp comparator.Comparator[T], opts ...set.Option) *set.Set[T] {
 	return set.New(cmp, opts...)

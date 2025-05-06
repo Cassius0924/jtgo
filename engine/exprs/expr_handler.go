@@ -4,19 +4,19 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"strings"
 
 	"github.com/cassius0924/jtgo/werror"
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
-	"github.com/samber/lo"
 	"github.com/spf13/cast"
 )
 
 type ExprHandler struct {
 	templateID string
 	template   string
-	dataset    map[string]any
+	env        map[string]any
 	fns        map[string]any
 }
 
@@ -31,32 +31,31 @@ func NewExprHandler(templateID, template string, fns map[string]any) *ExprHandle
 
 // SetDataset 设置数据集
 func (h *ExprHandler) SetDataset(dataset map[string]any) {
-	h.dataset = dataset
+	// 把dataset和函数合并到env中
+	maps.Copy(dataset, h.fns)
+	h.env = dataset
 }
 
 // Run 解析表达式
 func (h *ExprHandler) Run(ctx context.Context, program *vm.Program) (any, error) {
-	// 把dataset和自定义函数合并到env中
-	// TODO: 解决频繁GC的问题，因为每次都要创建一个新的map
-	env := lo.Assign(h.dataset, h.fns)
-	env["ctx"] = ctx
-	return expr.Run(program, env)
+	h.env["ctx"] = ctx
+	return expr.Run(program, h.env)
 }
 
 // EvaluateExpression 计算表达式
 func (h *ExprHandler) EvaluateExpression(ctx context.Context, compiledExps map[string]*vm.Program, expression string) (any, error) {
 	program, ok := compiledExps[expression]
 	if !ok {
-		slog.ErrorContext(ctx, "[ExprHandler.EvaluateExpression] compiledExps not found, please check code", "expression", expression)
+		slog.ErrorContext(ctx, "[exprs.EvaluateExpression] compiledExps not found, please check code", "expression", expression)
 		return nil, werror.ErrCompiledExpressionNotFound
 	}
 	result, err := h.Run(ctx, program)
 	if err != nil {
 		// 这里用Warn，因为表达式可以不进行空指针判断，若出现空指针，这里会有err，但符合预期
-		slog.WarnContext(ctx, "[ExprHandler.EvaluateExpression] expr.Run err", "expression", expression, "error", err)
+		slog.WarnContext(ctx, "[exprs.EvaluateExpression] expr.Run err", "expression", expression, "error", err)
 		return nil, err
 	}
-	slog.InfoContext(ctx, fmt.Sprintf("[ExprHandler.EvaluateExpression] expr.Run success,\nexpression = %s,\nresult = %v", expression, result))
+	slog.InfoContext(ctx, fmt.Sprintf("[exprs.EvaluateExpression] expr.Run success,\nexpression = %s,\nresult = %v", expression, result))
 	return result, nil
 }
 
@@ -82,7 +81,7 @@ func (h *ExprHandler) EvaluateExpressionsInText(ctx context.Context, compiledExp
 		input = strings.ReplaceAll(input, fmt.Sprintf(expressionFormat, exp), resultStr)
 	}
 	if input == "" {
-		slog.InfoContext(ctx, "[ExprHandler.EvaluateExpressionsInText] input is empty after replace", "input", input)
+		slog.InfoContext(ctx, "[exprs.EvaluateExpressionsInText] input is empty after replace", "input", input)
 		return nil
 	}
 	return input
@@ -97,7 +96,7 @@ func (h *ExprHandler) EvaluateExpressionToBool(ctx context.Context, compiledExps
 	// 把result转换为bool
 	isBoolResult, castErr := cast.ToBoolE(result)
 	if castErr != nil {
-		slog.WarnContext(ctx, "[ExprHandler.EvaluateExpressionToBool] exprResult not bool, please check expression", "expression", expression, "result", result)
+		slog.WarnContext(ctx, "[exprs.EvaluateExpressionToBool] exprResult not bool, please check expression", "expression", expression, "result", result)
 		return false, werror.ErrExpressionResultNotBool
 	}
 	return isBoolResult, nil
@@ -126,7 +125,7 @@ func (h *ExprHandler) CompileStringExpressions(ctx context.Context, expression s
 		}
 		program, err := h.Compile(ctx, exp)
 		if err != nil {
-			slog.ErrorContext(ctx, "[JSONTemplateEngine.compileStringExpressions] expr.Compile err", "expression", exp, "error", err)
+			slog.ErrorContext(ctx, "[exprs.compileStringExpressions] expr.Compile err", "expression", exp, "error", err)
 		} else {
 			compiledExps[exp] = program
 		}

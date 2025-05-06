@@ -70,8 +70,8 @@ func (p *Parser) Parse(ctx context.Context, template, entry string, target any) 
 // templateFieldName: 模板节点的字段名
 func (p *Parser) interativeParse(ctx context.Context, templateNode *model.TNode, templateFieldName string) any {
 	var (
-		frameStack     = ds.NewStack[*model.ParseFrame]() // 解析帧栈，用于深度优先遍历JSON树
-		result     any = make(map[string]any)             // 初始化结果为空map
+		frameStack     = ds.NewStackWithListContainer[*model.ParseFrame]() // 解析帧栈，用于深度优先遍历JSON树
+		result     any = make(map[string]any)                              // 初始化结果为空map
 	)
 
 	// 解析栈的工作原理:

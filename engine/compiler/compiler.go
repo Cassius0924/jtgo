@@ -53,7 +53,7 @@ func (c *Compiler) Compile(ctx context.Context, template string) error {
 
 // iterativeCompile 迭代编译模板
 func (c *Compiler) iterativeCompile(ctx context.Context, templateNode *model.TNode) error {
-	var frameStack = ds.NewStack[*CompileFrame]()
+	var frameStack = ds.NewStackWithListContainer[*CompileFrame]()
 
 	// 初始化栈，将根节点压入栈中
 	frameStack.Push(&CompileFrame{
