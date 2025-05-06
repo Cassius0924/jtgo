@@ -66,58 +66,17 @@ func (p *Parser) returnResult(ctx context.Context, node *model.TNode) any {
 	return result
 }
 
-// varAssignment 处理VAR变量赋值
-func (p *Parser) varAssignment(ctx context.Context, node *model.TNode) {
-	if !node.Exists() {
-		return
-	}
-
-	switch {
-	// 只有Object类型才能进行变量赋值，其他类型均属于语法错误
-	case node.IsObject():
-		node.ForEach(func(key, value model.TNode) bool {
-			// key是变量名或表达式，value是变量值
-			keyName := common.NormalizeFieldName(key.String())
-			expression, isExpression := exprs.ExtractExpression(keyName)
-			// 不是表达式，是变量名，则创建变量
-			if !isExpression {
-				if keyName == "" {
-					return true
-				}
-				if p.dataset == nil {
-					p.dataset = make(map[string]any)
-				}
-				p.localVariables[keyName] = p.dataset[keyName]
-				p.dataset[keyName] = p.replaceExpression(ctx, &value)
-				slog.InfoContext(ctx, fmt.Sprintf("[parser.varAssignment](trace) create variable,\nkey = %s,\nvalue = %s,\nexpr = %s", keyName, util.GenerateStructFormatedString(p.dataset[keyName]), value.String()))
-				return true
-			}
-			// 如果表达式对应的不是一个 Object，则属于语法错误，跳过
-			if !value.IsObject() {
-				slog.ErrorContext(ctx, "[parser.varAssignment] expression value is not an object, please check if the expression value is an object!", "key", keyName, "value", value.String())
-				return true
-			}
-
-			// 是表达式，计算表达式
-			isBoolResult, err := p.exprHandler.EvaluateExpressionToBool(ctx, p.compiledExps, expression)
-			if err != nil {
-				p.err = err
-				return true
-			}
-			if isBoolResult {
-				slog.InfoContext(ctx, "[parser.varAssignment] matched expression, nested var assignment", "matchedExpression", expression)
-				p.varAssignment(ctx, &value)
-				return true
-			}
-			return true
-		})
-	default:
-		slog.ErrorContext(ctx, "[parser.varAssignment] do value is not an object, please check if the do value is an object!", "doValue", node.String())
-	}
+// assignVariables 处理VAR变量赋值
+func (p *Parser) assignVariables(ctx context.Context, node *model.TNode, frame *model.ParseFrame) bool {
+	frame.SharedMemo["var_assigning"] = true
+	return true
 }
 
 // judgeConditionalIf 处理if条件判断，返回是否命中该条件
 func (p *Parser) judgeConditionalIf(ctx context.Context, node *model.TNode, expression string, frame *model.ParseFrame) bool {
+	// 重置MatchedValue
+	frame.ResetMatched()
+
 	// 表达式计算为bool值
 	matched, err := p.exprHandler.EvaluateExpressionToBool(ctx, p.compiledExps, expression)
 	if err != nil {
@@ -137,7 +96,30 @@ func (p *Parser) judgeConditionalIf(ctx context.Context, node *model.TNode, expr
 
 // judgeConditionalElif 处理elif条件判断，返回是否命中该条件
 func (p *Parser) judgeConditionalElif(ctx context.Context, node *model.TNode, expression string, frame *model.ParseFrame) bool {
-	return p.judgeConditionalIf(ctx, node, expression, frame)
+	if !frame.CondContext.HasIfBranch {
+		// 是孤儿 elif 则视为 false
+		slog.WarnContext(ctx, "[parser.judgeConditionalElif] this elif is orphan, please check if the elif belongs to an if!", "key", frame.FieldName)
+		return false
+	}
+
+	// 如果当前条件分支已经命中，则不需要再执行 elif 语句
+	if frame.CondContext.IsMatched {
+		return false
+	}
+
+	matched, err := p.exprHandler.EvaluateExpressionToBool(ctx, p.compiledExps, expression)
+	if err != nil {
+		p.err = err
+	}
+
+	if matched {
+		frame.CondContext.MatchedValue = node
+		frame.CondContext.IsMatched = true
+	}
+
+	frame.CondContext.HasIfBranch = true
+	slog.InfoContext(ctx, fmt.Sprintf("[parser.judgeConditionalIf](trace) condition evaluate result,\nkey = %s,\nvalue = %s,\nexpr = %s", frame.FieldName, node.String(), expression))
+	return matched
 }
 
 // judgeConditionalElse 处理else条件判断
@@ -150,12 +132,17 @@ func (p *Parser) judgeConditionalElse(ctx context.Context, node *model.TNode, fr
 		return false
 	}
 
+	// 如果当前条件分支已经命中，则不需要再执行 else 语句
+	if frame.CondContext.IsMatched {
+		return false
+	}
+
 	frame.CondContext.MatchedValue = node
 	frame.CondContext.IsMatched = true
 
 	// 重置条件分支的情况
-	frame.CondContext.ResetBranches()
-	slog.InfoContext(ctx, fmt.Sprintf("[parser.judgeConditionalIf](trace) condition evaluate result,\nkey = %s,\nvalue = %s", frame.FieldName, node.String()))
+	frame.ResetBranches()
+	slog.InfoContext(ctx, fmt.Sprintf("[parser.judgeConditionalElse](trace) condition evaluate result,\nkey = %s,\nvalue = %s", frame.FieldName, node.String()))
 	return true
 }
 
@@ -193,7 +180,7 @@ func (p *Parser) executeLoop(ctx context.Context, node *model.TNode, statement s
 				p.dataset[loopMeta.Value] = item
 			}
 
-			result = append(result, p.iterativeParse(ctx, node, frame.CurSubNodeFieldName))
+			result = append(result, p.iterativeParse(ctx, node, string(keywords.KeywordFor)))
 
 			// 处理完当前循环，恢复局部变量
 			if loopMeta.Key != "" {
@@ -220,7 +207,7 @@ func (p *Parser) executeLoop(ctx context.Context, node *model.TNode, statement s
 				p.dataset[loopMeta.Value] = value
 			}
 
-			result = append(result, p.iterativeParse(ctx, node, frame.CurSubNodeFieldName))
+			result = append(result, p.iterativeParse(ctx, node, string(keywords.KeywordFor)))
 
 			// 处理完当前循环，恢复局部变量
 			if loopMeta.Key != "" {

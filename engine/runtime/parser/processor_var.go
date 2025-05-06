@@ -13,7 +13,5 @@ type VarProcessor struct {
 
 // Process 实现变量处理逻辑
 func (p *VarProcessor) Process(ctx context.Context, node *model.TNode, statement string, frame *model.ParseFrame, parser *Parser) bool {
-	parser.varAssignment(ctx, node)
-	// 变量赋值后不需要继续处理
-	return false
+	return parser.assignVariables(ctx, node, frame)
 }

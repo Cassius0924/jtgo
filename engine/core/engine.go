@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"sync"
 
@@ -38,15 +37,12 @@ var (
 type JTEngine struct {
 	ctx            context.Context
 	templateID     string
-	metricsTags    map[string]string
 	template       string
 	entry          string
-	err            error
 	dataset        map[string]any
 	target         any
 	compiledExps   map[string]*vm.Program     // 缓存编译过的表达式
 	loopMetas      map[string]*model.LoopMeta // 循环语句元数据
-	localVariables map[string]any             // 局部变量名称和值
 
 	exprHandler *exprs.ExprHandler // 表达式处理器
 	compiler    *compiler.Compiler // 模板编译器
@@ -76,12 +72,6 @@ func (e *JTEngine) ParseTo(target any) *JTEngine {
 	return e
 }
 
-// WithMetricsTags 设置Metrics Tags，用于上报 Run 函数耗时
-func (e *JTEngine) WithMetricsTags(metricsTags map[string]string) *JTEngine {
-	e.metricsTags = metricsTags
-	return e
-}
-
 // GetDataset 获取数据集
 func (e *JTEngine) GetDataset() map[string]any {
 	return e.dataset
@@ -91,7 +81,6 @@ func (e *JTEngine) clear() {
 	e.entry = defaultEntry
 	e.dataset = nil
 	e.target = nil
-	e.err = nil
 }
 
 func GetJSONTemplateEngine(ctx context.Context, templateID, template string) (*JTEngine, error) {
@@ -158,7 +147,6 @@ func GetJSONTemplateEngine(ctx context.Context, templateID, template string) (*J
 			template:       template,
 			compiledExps:   cachedCompiledExps, // 使用原缓存编译过的表达式
 			loopMetas:      cachedLoopMeta,     // 使用原缓存循环元数据
-			localVariables: make(map[string]any),
 
 			exprHandler: exprHandler,
 			parser:      parser.NewParser(exprHandler, cachedCompiledExps, cachedLoopMeta),
@@ -182,7 +170,6 @@ func createJSONTemplateEngine(ctx context.Context, templateID, template string) 
 		templateID:     templateID,
 		entry:          defaultEntry,
 		template:       template,
-		localVariables: make(map[string]any),
 
 		exprHandler: exprHandler,
 		compiler:    compiler.NewCompiler(exprHandler),
@@ -242,11 +229,11 @@ func (e *JTEngine) keepStatusRun() (string, error) {
 
 	defer func() {
 		// 恢复局部变量
-		for k, v := range e.localVariables {
-			e.dataset[k] = v
-			slog.InfoContext(e.ctx, fmt.Sprintf("[core.keepStatusRun] restore variable,\nkey = %s,\nvalue = %v", k, v))
-		}
-		e.localVariables = make(map[string]any)
+		// for k, v := range e.localVariables {
+		// 	e.dataset[k] = v
+		// 	slog.InfoContext(e.ctx, fmt.Sprintf("[core.keepStatusRun] restore variable,\nkey = %s,\nvalue = %v", k, v))
+		// }
+		// e.localVariables = make(map[string]any)
 	}()
 
 	return e.parser.Parse(e.ctx, e.template, e.entry, e.target)

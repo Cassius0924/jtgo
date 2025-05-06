@@ -214,8 +214,8 @@ func TestEngine_ConditionalIfNested(t *testing.T) {
 	})
 }
 
-func TestEngine_ConditionalIfNested2(t *testing.T) {
-	Convey("TestEngine_ConditionalIfNested2", t, func() {
+func TestEngine_ConditionalIfNestedNoMatch(t *testing.T) {
+	Convey("TestEngine_ConditionalIfNestedNoMatch", t, func() {
 		tmpl := `
 {
 	"_main_": {
@@ -249,8 +249,7 @@ func TestEngine_ConditionalIfNested2(t *testing.T) {
 		So(result, ShouldEqualJSON, `
 {
 	"age": 12,
-	"name": "hello",
-	"age": 12
+	"name": "hello"
 }
 	`)
 	})
@@ -719,9 +718,11 @@ func TestEngine_Var(t *testing.T) {
 		"name": {
 			"@var": {
 				"a": "hello",
-				"z": "num_${b + c}"
+				"b": 1,
+				"c": "num_${x + y}",
+				"d": false
 			},
-			"value": "${a}_${z}"
+			"value": "${a}_${b}_${c}_${d}"
 		}
 	}
 }
@@ -731,8 +732,8 @@ func TestEngine_Var(t *testing.T) {
 
 		dataset := map[string]any{
 			"a": true,
-			"b": 1.2,
-			"c": 2,
+			"x": 1.2,
+			"y": 2,
 		}
 
 		result, _ := engine.WithDataset(dataset).Run()
@@ -740,9 +741,129 @@ func TestEngine_Var(t *testing.T) {
 		So(result, ShouldEqualJSON, `
 {
 	"name": {
-		"value": "hello_num_3.2"
+		"value": "hello_1_num_3.2_false"
 	}
 }
+`)
+
+	})
+}
+
+func TestEngine_VarWithIf(t *testing.T) {
+	Convey("TestEngine_VarWithIf", t, func() {
+		// TODO: 限制不能if套var，仅可var套if
+		tmpl := `
+{
+	"_main_": {
+		"name": {
+			"@var": {
+				"@if noExist": {
+					"y": "nothing"
+				},
+				"a": false,
+				"@if a": {
+					"@if false": {
+						"z": "wrong"
+					}
+				},
+				"@elif true": {
+					"@else": {
+						"x": "orphan else"
+					},
+					"@if true": {
+						"b": "world"
+					},
+					"@if true": {
+						"c": "json"
+					}
+				},
+				"@else": {
+					"x": "nothing"
+				}
+			},
+			"value": "${a}_${b}_${c}_${x}_${y}_${z}"
+		}
+	}
+}
+`
+		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_VarWithIf", tmpl)
+		So(err, ShouldBeNil)
+
+		dataset := map[string]any{}
+
+		result, _ := engine.WithDataset(dataset).Run()
+
+		So(result, ShouldEqualJSON, `
+{
+	"name": {
+		"value": "false_world_json___"
+	}
+}
+`)
+
+	})
+}
+
+func TestEngine_TemplateInList(t *testing.T) {
+	Convey("TestEngine_TemplateInList", t, func() {
+		tmpl := `
+{
+    "_main_": [
+        "hello",
+		[
+            {
+                "name": "${a}"
+            },
+            {
+                "value": "${b}"
+            }
+        ],
+        {
+            "name": "hello",
+            "value": {
+                "@if a": "world"
+            }
+        },
+        {
+            "time": {
+                "@if a": "now",
+                "@else": "idk"
+            },
+            "author": "Cassius0924"
+        }
+    ]
+}
+`
+		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_TemplateInList", tmpl)
+		So(err, ShouldBeNil)
+
+		dataset := map[string]any{
+			"a": true,
+			"b": "best",
+		}
+
+		result, _ := engine.WithDataset(dataset).Run()
+
+		So(result, ShouldEqualJSON, `
+[
+	"hello",
+	[
+		{
+			"name": true
+		},
+		{
+			"value": "best"
+		}
+	],
+	{
+		"name": "hello",
+		"value": "world"
+	},
+	{
+		"time": "now",
+		"author": "Cassius0924"
+	}
+]
 `)
 
 	})

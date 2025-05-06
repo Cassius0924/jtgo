@@ -13,25 +13,47 @@ type TNode = gjson.Result
 
 // ParseFrame 模板引擎解析帧
 type ParseFrame struct {
-	Node       *TNode
-	FieldName  string
-	Target     any
-	Result     any            // 本帧的解析结果
-	SharedMemo map[string]any // 帧与帧之间的共享备忘录，类似一个全局变量
+	Node          *TNode         // 当前帧的节点
+	FieldName     string         // 当前帧的字段名
+	Target        any            // 父帧的解析结果，指向父帧的 Result
+	Result        any            // 本帧的解析结果
+	IsArrayResult bool           // 本帧的解析结果是否是数组
+	SharedMemo    map[string]any // 帧与帧之间的共享数据的备忘录，类似一个全局变量
 
-	SubNodeIter         *vector.VectorIterator[*ds.Pair[TNode, TNode]]
-	CurSubNodeFieldName string
+	SubNodeIter *vector.VectorIterator[*ds.Pair[TNode, TNode]] // 当前帧的子节点迭代器
 
-	CondContext *ConditionalContext
-	LoopContext *LoopContext
+	CondContext *ConditionalContext // 当前帧的条件上下文信息
+	LoopContext *LoopContext        // 当前帧的循环上下文信息
 }
 
 func (f *ParseFrame) IsConditionalMatched() bool {
-	return f.CondContext != nil && f.CondContext.IsMatched && !(f.SharedMemo["nomatch"] == true)
+	return f.CondContext != nil && f.CondContext.IsMatched && !(f.SharedMemo["no_match"] == true)
 }
 
 func (f *ParseFrame) HasLoopContext() bool {
 	return f.LoopContext != nil
+}
+
+func (f *ParseFrame) IsVarAssigning() bool {
+	return f.SharedMemo["var_assigning"] == true
+}
+
+// ResetBranches 重置分支状态
+func (f *ParseFrame) ResetBranches() {
+	if f.CondContext == nil {
+		return
+	}
+	f.CondContext.HasIfBranch = false
+	f.CondContext.HasElseBranch = false
+}
+
+// ResetMatched 重置匹配状态
+func (f *ParseFrame) ResetMatched() {
+	if f.CondContext == nil {
+		return
+	}
+	f.CondContext.MatchedValue = nil
+	f.CondContext.IsMatched = false
 }
 
 // ConditionalContext 条件判断上下文
@@ -40,12 +62,6 @@ type ConditionalContext struct {
 	IsMatched     bool
 	HasIfBranch   bool // 是否有if分支
 	HasElseBranch bool // 是否有else分支
-}
-
-// ResetBranches 重置分支状态
-func (c *ConditionalContext) ResetBranches() {
-	c.HasIfBranch = false
-	c.HasElseBranch = false
 }
 
 type LoopType int
@@ -69,14 +85,11 @@ type LoopContext struct {
 	ObjectRefl     *reflect.Value   // 当前循环对象的反射
 	OwnerFieldName string           // 当前循环所属的字段名
 	Continued      bool             // 是否命中 continue
-	LocalVars      map[string]any   // 局部变量，TODO: 确定这个变量的含义
 	IsSerialFor    bool             // 是否是串行for循环
 }
 
 func NewLoopContext() *LoopContext {
-	return &LoopContext{
-		LocalVars: make(map[string]any),
-	}
+	return &LoopContext{ }
 }
 
 // LoopMeta 循环元数据，用于存储循环的键、值和对象的变量名

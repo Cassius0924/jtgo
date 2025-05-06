@@ -2,6 +2,7 @@ package parser
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/bytedance/sonic"
@@ -11,8 +12,10 @@ import (
 	"github.com/cassius0924/jtgo/engine/keywords"
 	"github.com/cassius0924/jtgo/engine/model"
 	"github.com/cassius0924/jtgo/util"
+	"github.com/cassius0924/jtgo/util/ptr"
 	"github.com/cassius0924/jtgo/werror"
 	"github.com/expr-lang/expr/vm"
+	"github.com/samber/lo"
 	"github.com/tidwall/gjson"
 )
 
@@ -70,9 +73,13 @@ func (p *Parser) Parse(ctx context.Context, template, entry string, target any) 
 // templateFieldName: 模板节点的字段名
 func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, templateFieldName string) any {
 	var (
-		frameStack     = ds.NewStackWithListContainer[*model.ParseFrame]() // 解析帧栈，用于深度优先遍历JSON树
-		result     any = make(map[string]any)                              // 初始化结果为空map
+		frameStack     = ds.NewStackWithListContainer[*model.ParseFrame]()                                                                             // 解析帧栈，用于深度优先遍历JSON树
+		result     any = lo.TernaryF(templateNode.IsArray(), func() any { return ptr.Of(make([]any, 0)) }, func() any { return make(map[string]any) }) // 初始化结果为空map或slice
 	)
+
+	if !templateNode.IsObject() && !templateNode.IsArray() {
+		return p.replaceExpression(ctx, templateNode)
+	}
 
 	// 解析栈的工作原理:
 	// 1. 每个解析帧(ParseFrame)代表JSON模板中的一个层级节点
@@ -98,12 +105,13 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 	//
 	// 初始化栈，将根节点压入栈中
 	frameStack.Push(&model.ParseFrame{
-		Node:        templateNode,
-		FieldName:   templateFieldName,
-		Target:      result,
-		Result:      result,
-		SharedMemo:  make(map[string]any, 2),
-		SubNodeIter: common.FlattenNode(templateNode).First(), // 子节点迭代器
+		Node:          templateNode,
+		FieldName:     templateFieldName,
+		Target:        result,
+		Result:        result,
+		IsArrayResult: templateNode.IsArray(),
+		SharedMemo:    make(map[string]any, 2),
+		SubNodeIter:   common.FlattenNode(templateNode).First(), // 子节点迭代器
 		CondContext: &model.ConditionalContext{ // 条件上下文
 			IsMatched: false, // 初始状态未匹配
 		},
@@ -118,23 +126,29 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 
 		// 以下三种情况需要弹出当前帧:
 		// 1. 子节点迭代器无效（已遍历完所有子节点）
-		// 2. 已匹配到条件语句
+		// 2. 在非变量赋值中的情况下，匹配到条件语句
 		// 3. 存在循环上下文（表示循环已处理完毕）
-		if !frame.SubNodeIter.IsValid() || frame.IsConditionalMatched() || frame.HasLoopContext() {
-			if frame.SharedMemo["no_match"] == true {
-				frame.SharedMemo["no_match"] = false
+		if !frame.SubNodeIter.IsValid() || (!frame.IsVarAssigning() && frame.IsConditionalMatched()) || frame.HasLoopContext() {
+			frame.SharedMemo["no_match"] = false
+			// 此处用于清空 变量赋值中 的标记
+			if keywords.IsVarKeyword(frame.FieldName) {
+				frame.SharedMemo["var_assigning"] = false
 			}
 
 			frameStack.Pop()
 			// 如果栈为空，说明所有帧都已经遍历完毕，处理最终结果并返回
 			if frameStack.Size() == 0 {
 				// 如果当前字段名为空或者是循环结果，则直接返回Result
-				if frame.CurSubNodeFieldName == "" {
-					result = frame.Result
-				} else if frame.LoopContext != nil && frame.LoopContext.IsSerialFor {
+				// if frame.CurSubNodeFieldName == "" {
+				// 	result = frame.Result
+				if frame.LoopContext != nil && frame.LoopContext.IsSerialFor {
 					result = frame.Result
 				}
 				break
+			}
+
+			if frame.IsVarAssigning() {
+				continue
 			}
 
 			// 将当前帧的结果传递给父帧
@@ -147,7 +161,7 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 					frame.SharedMemo["assist_result"] = frame.Result
 				}
 			} else {
-				// 非关键字字段的处理
+				// 非关键字字段的处理，TODO: 试试能不能把Target的赋值逻辑移动到default里
 				var resultValue any
 				if assistRes, ok := frame.SharedMemo["assist_result"]; ok {
 					// 如果存在辅助结果，使用辅助结果作为值
@@ -157,21 +171,23 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 					resultValue = frame.Result
 				}
 				// 将结果设置到父帧的目标中
-				frame.Target.(map[string]any)[frame.FieldName] = resultValue
+				if target, ok := frame.Target.(*[]any); ok {
+					// 如果目标是数组类型，直接追加结果
+					*target = append(*target, resultValue)
+				} else {
+					frame.Target.(map[string]any)[frame.FieldName] = resultValue
+				}
 			}
 			continue
 		}
-		if frame.SharedMemo["no_match"] == true {
-			frame.SharedMemo["no_match"] = false
-		}
+		frame.SharedMemo["no_match"] = false
 
 		// 取出当前子节点，并将迭代器指向下一个元素
 		subNodePair := frame.SubNodeIter.Value()
-		subNodeField, subNode = subNodePair.First, subNodePair.Second
 		frame.SubNodeIter.Next()
-
+		subNodeField, subNode = subNodePair.First, subNodePair.Second
 		subNodeFieldName := common.NormalizeFieldName(subNodeField.String())
-		frame.CurSubNodeFieldName = subNodeFieldName
+		// frame.CurSubNodeFieldName = subNodeFieldName
 
 		// 处理模板语法关键字
 		keyword, statement := keywords.DetectKeyword(subNodeFieldName)
@@ -196,28 +212,66 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 		case subNode.IsObject():
 			// 如果是对象类型，需要创建新的解析帧并压入栈中，继续深度遍历
 			frameStack.Push(&model.ParseFrame{
-				Node:        &subNode,
-				FieldName:   subNodeFieldName,
-				Target:      frame.Result,
-				Result:      make(map[string]any),
-				SharedMemo:  frame.SharedMemo,
-				SubNodeIter: common.FlattenNode(&subNode).First(),
+				Node:          &subNode,
+				FieldName:     subNodeFieldName,
+				Target:        frame.Result,
+				Result:        lo.TernaryF(subNode.IsArray(), func() any { return ptr.Of(make([]any, 0)) }, func() any { return make(map[string]any) }),
+				IsArrayResult: subNode.IsArray(),
+				SharedMemo:    frame.SharedMemo,
+				SubNodeIter:   common.FlattenNode(&subNode).First(),
 				CondContext: &model.ConditionalContext{
 					IsMatched: false,
 				},
 			})
 			continue
+		case subNode.IsArray():
+			// 如果是数组类型，需要反向遍历数组元素
+			// 并且 target指向一个新切片
+			var (
+				arr        = subNode.Array()
+				target any = ptr.Of(make([]any, 0))
+			)
+			if frame.IsArrayResult {
+				result := frame.Result.(*[]any)
+				*result = append(*result, target)
+			} else {
+				frame.Result.(map[string]any)[subNodeFieldName] = target
+			}
+
+			for i := len(arr) - 1; i >= 0; i-- {
+				frameStack.Push(&model.ParseFrame{
+					Node:          &arr[i],
+					FieldName:     subNodeFieldName,
+					Target:        target,
+					Result:        lo.TernaryF(arr[i].IsArray(), func() any { return ptr.Of(make([]any, 0)) }, func() any { return make(map[string]any) }),
+					IsArrayResult: arr[i].IsArray(),
+					SharedMemo:    frame.SharedMemo,
+					SubNodeIter:   common.FlattenNode(&arr[i]).First(),
+					CondContext: &model.ConditionalContext{
+						IsMatched: false,
+					},
+				})
+			}
 		default:
-			// 处理基本类型节点和其他情况
-			if frame.IsConditionalMatched() {
+			if frame.IsVarAssigning() {
+				// 正在进行变量赋值
+				p.localVariables[subNodeFieldName] = p.dataset[subNodeFieldName]
+				p.dataset[subNodeFieldName] = p.replaceExpression(ctx, &subNode)
+				slog.InfoContext(ctx, fmt.Sprintf("[parser.assignVariables](trace) create variable,\nkey = %s,\nvalue = %s,\nexpr = %s", subNodeFieldName, util.GenerateStructFormattedString(p.dataset[subNodeFieldName]), subNode.String()))
+			} else if frame.IsConditionalMatched() {
 				// 条件语句匹配成功，使用条件匹配值
 				frame.Result = p.replaceExpression(ctx, frame.CondContext.MatchedValue)
-			} else if subNodeFieldName == "" {
-				// 无字段名，直接设置结果
-				frame.Result = p.replaceExpression(ctx, &subNode)
+				// } else if subNodeFieldName == "" {
+				// 	// 无字段名，直接设置结果
+				// 	frame.Result = p.replaceExpression(ctx, &subNode)
 			} else {
 				// 有字段名，设置结果的对应字段
-				frame.Result.(map[string]any)[subNodeFieldName] = p.replaceExpression(ctx, &subNode)
+				if frame.IsArrayResult {
+					result := frame.Result.(*[]any)
+					*result = append(*result, p.replaceExpression(ctx, &subNode))
+				} else {
+					frame.Result.(map[string]any)[subNodeFieldName] = p.replaceExpression(ctx, &subNode)
+				}
 			}
 			continue
 		}
@@ -231,47 +285,8 @@ func (p *Parser) replaceExpression(ctx context.Context, input *model.TNode) any 
 	if input == nil || !input.Exists() {
 		return nil
 	}
-	// JSON 共有 6 种类型：input, array, bool, number, null, string
+	// JSON 共有 6 种类型：array, bool, number, null, string
 	switch {
-	case input.IsObject(): // input
-		var (
-			result          = make(map[string]any)
-			resultForReturn any
-			isExpression    bool
-		)
-
-		input.ForEach(func(field, node model.TNode) bool {
-			fieldName := common.NormalizeFieldName(field.String())
-
-			switch keyword, _ := keywords.DetectKeyword(fieldName); keyword {
-			case keywords.KeywordReturn:
-				// 遇到 RETURN 关键词，直接返回
-				resultForReturn = p.returnResult(ctx, &node)
-				return false
-			case keywords.KeywordExec:
-				// 是 Exec 关键词，需要执行操作
-				p.execOperations(ctx, &node)
-				return true
-			case keywords.KeywordVar:
-				// 是 VAR 关键词，需要进行变量赋值
-				p.varAssignment(ctx, &node)
-				return true
-			default:
-				// 其他情况，继续处理
-			}
-			_, isExpression = exprs.ExtractExpression(fieldName)
-			if !isExpression {
-				result[fieldName] = p.replaceExpression(ctx, &node)
-				return true
-			}
-
-			return true
-		})
-
-		if resultForReturn != nil {
-			return resultForReturn
-		}
-		return result
 	case input.IsArray(): // array
 		var result []any
 		for _, value := range input.Array() {
