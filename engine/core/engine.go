@@ -104,15 +104,18 @@ func GetJSONTemplateEngine(ctx context.Context, templateID, template string) (*J
 		return nil, werror.ErrTemplateIsEmpty
 	}
 
+	var cachedTemplate string
 	validateErr := util.ValidateJSON(template)
-	cachedTemplateNode, _ := templateIDToTemplate.Load(templateID)
+	if cachedTemplate, ok := templateIDToTemplate.Load(templateID); ok && cachedTemplate != nil {
+		cachedTemplate = cachedTemplate.(string)
+	}
 
 	if validateErr != nil {
 		slog.ErrorContext(ctx, "[core.GetJSONTemplateEngine] template is invalid JSON", "templateID", templateID, "template", template, "error", validateErr)
 	}
 
-	if template == cachedTemplateNode || validateErr != nil { // 模板无更新 或 模板格式不合法 则使用缓存
-		if cachedTemplateNode == nil {
+	if equalTemplate(template, cachedTemplate) || validateErr != nil { // 模板无更新 或 模板格式不合法 则使用缓存
+		if cachedTemplate == "" {
 			if validateErr != nil {
 				return nil, werror.Join(werror.ErrTemplateIsInvalidJSON, validateErr)
 			}
@@ -247,4 +250,8 @@ func (e *JTEngine) keepStatusRun() (string, error) {
 	}()
 
 	return e.parser.Parse(e.ctx, e.template, e.entry, e.target)
+}
+
+func equalTemplate(templateA, templateB string) bool {
+	return templateA == templateB
 }
