@@ -28,34 +28,6 @@ func TestEngine_InputOutput(t *testing.T) {
 }
 
 func fetchDataset(filename string, t *testing.T) map[string]any {
-
-	// userList := []map[string]any{
-	// 	{
-	// 		"last_name":  "L",
-	// 		"first_name": "Alice",
-	// 		"age":        17,
-	// 		"tags":       []string{"vip", "beta"},
-	// 		"score":      0.9,
-	// 		"active":     true,
-	// 	},
-	// 	{
-	// 		"last_name":  "H",
-	// 		"first_name": "Bob",
-	// 		"age":        25,
-	// 		"tags":       []string{"new"},
-	// 		"score":      0.7,
-	// 		"active":     true,
-	// 	},
-	// 	{
-	// 		"last_name":  "Z",
-	// 		"first_name": "Tim",
-	// 		"age":        65,
-	// 		"tags":       []string{},
-	// 		"score":      0.5,
-	// 		"active":     false,
-	// 	},
-	// }
-	// 读取json
 	datasetBytes, err := os.ReadFile(filename)
 	if err != nil {
 		t.Fatalf("failed to read dataset: %v", err)
