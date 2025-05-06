@@ -11,7 +11,7 @@ func init() {
 	spew.Config.Indent = "    "
 }
 
-// GenerateStructFormatedString 生成结构体格式化字符串
-func GenerateStructFormatedString(raw any) string {
+// GenerateStructFormattedString 生成结构体格式化字符串
+func GenerateStructFormattedString(raw any) string {
 	return fmt.Sprint(spew.Sdump(raw))
 }

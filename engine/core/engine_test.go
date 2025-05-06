@@ -711,6 +711,43 @@ func TestEngine_Comment(t *testing.T) {
 	})
 }
 
+func TestEngine_Var(t *testing.T) {
+	Convey("TestEngine_Var", t, func() {
+		tmpl := `
+{
+	"_main_": {
+		"name": {
+			"@var": {
+				"a": "hello",
+				"z": "num_${b + c}"
+			},
+			"value": "${a}_${z}"
+		}
+	}
+}
+`
+		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_Var", tmpl)
+		So(err, ShouldBeNil)
+
+		dataset := map[string]any{
+			"a": true,
+			"b": 1.2,
+			"c": 2,
+		}
+
+		result, _ := engine.WithDataset(dataset).Run()
+
+		So(result, ShouldEqualJSON, `
+{
+	"name": {
+		"value": "hello_num_3.2"
+	}
+}
+`)
+
+	})
+}
+
 func TestEngine_ComplexTemplate(t *testing.T) {
 	Convey("TestEngine_ComplexTemplate", t, func() {
 		tmpl := `

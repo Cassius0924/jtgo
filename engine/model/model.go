@@ -42,8 +42,8 @@ type ConditionalContext struct {
 	HasElseBranch bool // 是否有else分支
 }
 
-// ResetBranchs 重置分支状态
-func (c *ConditionalContext) ResetBranchs() {
+// ResetBranches 重置分支状态
+func (c *ConditionalContext) ResetBranches() {
 	c.HasIfBranch = false
 	c.HasElseBranch = false
 }

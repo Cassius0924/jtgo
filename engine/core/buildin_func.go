@@ -201,7 +201,7 @@ func Use(ctx context.Context, path string, variables ...*Variable) any {
 			dataset = make(map[string]any)
 		}
 		dataset[v.name] = v.value
-		slog.InfoContext(ctx, fmt.Sprintf("[configengine.Use](trace) create variable,\nkey = %s,\nvalue = %s", v.name, util.GenerateStructFormatedString(v.value)))
+		slog.InfoContext(ctx, fmt.Sprintf("[configengine.Use](trace) create variable,\nkey = %s,\nvalue = %s", v.name, util.GenerateStructFormattedString(v.value)))
 	}
 	// 从引擎中获取对象
 	var result any
@@ -303,7 +303,7 @@ func Set(ctx context.Context, key string, value any) bool {
 		dataset = make(map[string]any)
 	}
 	dataset[key] = value
-	slog.InfoContext(ctx, fmt.Sprintf("[configengine.Set](trace) set value.\nkey = %s,\nvalue = %s", key, util.GenerateStructFormatedString(value)))
+	slog.InfoContext(ctx, fmt.Sprintf("[configengine.Set](trace) set value.\nkey = %s,\nvalue = %s", key, util.GenerateStructFormattedString(value)))
 	return true
 }
 

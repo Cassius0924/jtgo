@@ -62,7 +62,7 @@ func (p *Parser) execOperations(ctx context.Context, node *model.TNode) {
 
 func (p *Parser) returnResult(ctx context.Context, node *model.TNode) any {
 	result := p.replaceExpression(ctx, node)
-	slog.InfoContext(ctx, fmt.Sprintf("[parser.returnResult](trace) return result,\nresult = %s", util.GenerateStructFormatedString(result)))
+	slog.InfoContext(ctx, fmt.Sprintf("[parser.returnResult](trace) return result,\nresult = %s", util.GenerateStructFormattedString(result)))
 	return result
 }
 
@@ -154,7 +154,7 @@ func (p *Parser) judgeConditionalElse(ctx context.Context, node *model.TNode, fr
 	frame.CondContext.IsMatched = true
 
 	// 重置条件分支的情况
-	frame.CondContext.ResetBranchs()
+	frame.CondContext.ResetBranches()
 	slog.InfoContext(ctx, fmt.Sprintf("[parser.judgeConditionalIf](trace) condition evaluate result,\nkey = %s,\nvalue = %s", frame.FieldName, node.String()))
 	return true
 }
@@ -193,7 +193,7 @@ func (p *Parser) executeLoop(ctx context.Context, node *model.TNode, statement s
 				p.dataset[loopMeta.Value] = item
 			}
 
-			result = append(result, p.interativeParse(ctx, node, frame.CurSubNodeFieldName))
+			result = append(result, p.iterativeParse(ctx, node, frame.CurSubNodeFieldName))
 
 			// 处理完当前循环，恢复局部变量
 			if loopMeta.Key != "" {
@@ -220,7 +220,7 @@ func (p *Parser) executeLoop(ctx context.Context, node *model.TNode, statement s
 				p.dataset[loopMeta.Value] = value
 			}
 
-			result = append(result, p.interativeParse(ctx, node, frame.CurSubNodeFieldName))
+			result = append(result, p.iterativeParse(ctx, node, frame.CurSubNodeFieldName))
 
 			// 处理完当前循环，恢复局部变量
 			if loopMeta.Key != "" {

@@ -51,13 +51,13 @@ func (p *Parser) Parse(ctx context.Context, template, entry string, target any) 
 	}
 
 	// 循环解析方法
-	result := p.interativeParse(ctx, &entryTemplateNode, entry)
+	result := p.iterativeParse(ctx, &entryTemplateNode, entry)
 	resultStr := util.SonicToString(result)
 
 	if target != nil {
 		// 将模板解析结果反序列化给target
 		if err := sonic.UnmarshalString(resultStr, target); err != nil {
-			slog.ErrorContext(ctx, "[parser.Parse] UnmarshalFromString config error, please check if the template JSON field name matches the target structure field name!", "finalTarget", util.GenerateStructFormatedString(result), "error", err)
+			slog.ErrorContext(ctx, "[parser.Parse] UnmarshalFromString config error, please check if the template JSON field name matches the target structure field name!", "finalTarget", util.GenerateStructFormattedString(result), "error", err)
 			return resultStr, werror.Join(werror.ErrParseToTargetFailed, err)
 		}
 	}
@@ -65,10 +65,10 @@ func (p *Parser) Parse(ctx context.Context, template, entry string, target any) 
 	return resultStr, p.err
 }
 
-// interativeParse 迭代解析方法
+// iterativeParse 迭代解析方法
 // 通过迭代方式解析JSON模板，将模板转换为最终输出结果
 // templateFieldName: 模板节点的字段名
-func (p *Parser) interativeParse(ctx context.Context, templateNode *model.TNode, templateFieldName string) any {
+func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, templateFieldName string) any {
 	var (
 		frameStack     = ds.NewStackWithListContainer[*model.ParseFrame]() // 解析帧栈，用于深度优先遍历JSON树
 		result     any = make(map[string]any)                              // 初始化结果为空map
@@ -121,8 +121,8 @@ func (p *Parser) interativeParse(ctx context.Context, templateNode *model.TNode,
 		// 2. 已匹配到条件语句
 		// 3. 存在循环上下文（表示循环已处理完毕）
 		if !frame.SubNodeIter.IsValid() || frame.IsConditionalMatched() || frame.HasLoopContext() {
-			if frame.SharedMemo["nomatch"] == true {
-				frame.SharedMemo["nomatch"] = false
+			if frame.SharedMemo["no_match"] == true {
+				frame.SharedMemo["no_match"] = false
 			}
 
 			frameStack.Pop()
@@ -141,8 +141,8 @@ func (p *Parser) interativeParse(ctx context.Context, templateNode *model.TNode,
 			if keywords.IsAnyKeyword(frame.FieldName) {
 				// 对于关键字字段，确保辅助结果中存储了当前结果
 				if resultMap, ok := frame.Result.(map[string]any); ok && len(resultMap) == 0 {
-					//  如果当前结果为空，则说明父条件语句不成立，通过 nomatch 标记
-					frame.SharedMemo["nomatch"] = true
+					//  如果当前结果为空，则说明父条件语句不成立，通过 no_match 标记
+					frame.SharedMemo["no_match"] = true
 				} else if _, ok := frame.SharedMemo["assist_result"]; !ok {
 					frame.SharedMemo["assist_result"] = frame.Result
 				}
@@ -161,8 +161,8 @@ func (p *Parser) interativeParse(ctx context.Context, templateNode *model.TNode,
 			}
 			continue
 		}
-		if frame.SharedMemo["nomatch"] == true {
-			frame.SharedMemo["nomatch"] = false
+		if frame.SharedMemo["no_match"] == true {
+			frame.SharedMemo["no_match"] = false
 		}
 
 		// 取出当前子节点，并将迭代器指向下一个元素
@@ -179,7 +179,7 @@ func (p *Parser) interativeParse(ctx context.Context, templateNode *model.TNode,
 			// 获取关键字处理器并执行处理
 			processor := GetProcessor(keyword)
 			if processor == nil {
-				slog.ErrorContext(ctx, "[parser.interativeParse] keyword processor not found", "keyword", keyword)
+				slog.ErrorContext(ctx, "[parser.iterativeParse] keyword processor not found", "keyword", keyword)
 				p.err = werror.ErrProcessorNotRegistered
 				return nil
 			}
