@@ -21,7 +21,6 @@ import (
 
 type Parser struct {
 	exprHandler    *exprs.ExprHandler         // 表达式处理器
-	compiledExps   map[string]*vm.Program     // 缓存编译过的表达式
 	loopMetas      map[string]*model.LoopMeta // 循环语句元数据
 	dataset        map[string]any             // 数据集
 	localVariables map[string]any             // 局部变量名称和值
@@ -33,7 +32,6 @@ type Parser struct {
 func NewParser(exprHandler *exprs.ExprHandler, compiledExps map[string]*vm.Program, loopMetas map[string]*model.LoopMeta) *Parser {
 	return &Parser{
 		exprHandler:    exprHandler,
-		compiledExps:   compiledExps,
 		loopMetas:      loopMetas,
 		localVariables: make(map[string]any),
 	}
@@ -105,13 +103,12 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 	//
 	// 初始化栈，将根节点压入栈中
 	frameStack.Push(&model.ParseFrame{
-		Node:          templateNode,
-		FieldName:     templateFieldName,
-		Target:        result,
-		Result:        result,
-		IsArrayResult: templateNode.IsArray(),
-		SharedMemo:    make(map[string]any, 2),
-		SubNodeIter:   common.FlattenNode(templateNode).First(), // 子节点迭代器
+		Node:        templateNode,
+		FieldName:   templateFieldName,
+		Target:      result,
+		Result:      result,
+		SharedMemo:  make(map[string]any, 2),
+		SubNodeIter: common.FlattenNode(templateNode).First(), // 子节点迭代器
 		CondContext: &model.ConditionalContext{ // 条件上下文
 			IsMatched: false, // 初始状态未匹配
 		},
@@ -126,28 +123,30 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 
 		// 以下三种情况需要弹出当前帧:
 		// 1. 子节点迭代器无效（已遍历完所有子节点）
-		// 2. 在非变量赋值中的情况下，匹配到条件语句
+		// 2. 在不需要遍历完所有字节点的情况下，匹配到条件语句（再需要遍历完所有节点的情况，即使匹配到条件语句，也需要继续解析，直至所有子节点解析完毕）
 		// 3. 存在循环上下文（表示循环已处理完毕）
-		if !frame.SubNodeIter.IsValid() || (!frame.IsVarAssigning() && frame.IsConditionalMatched()) || frame.HasLoopContext() {
+		if !frame.SubNodeIter.IsValid() || (!frame.ShouldTraverseAllSubNodes() && frame.IsConditionalMatched()) || frame.HasLoopContext() {
 			frame.SharedMemo["no_match"] = false
 			// 此处用于清空 变量赋值中 的标记
 			if keywords.IsVarKeyword(frame.FieldName) {
-				frame.SharedMemo["var_assigning"] = false
+				frame.SharedMemo["assigning_variable"] = false
+			}
+			// 此处用于清空 执行操作中 的标记
+			if keywords.IsExecKeyword(frame.FieldName) {
+				frame.SharedMemo["executing_operation"] = false
 			}
 
 			frameStack.Pop()
 			// 如果栈为空，说明所有帧都已经遍历完毕，处理最终结果并返回
 			if frameStack.Size() == 0 {
 				// 如果当前字段名为空或者是循环结果，则直接返回Result
-				// if frame.CurSubNodeFieldName == "" {
-				// 	result = frame.Result
 				if frame.LoopContext != nil && frame.LoopContext.IsSerialFor {
 					result = frame.Result
 				}
 				break
 			}
 
-			if frame.IsVarAssigning() {
+			if frame.ShouldTraverseAllSubNodes() {
 				continue
 			}
 
@@ -161,7 +160,7 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 					frame.SharedMemo["assist_result"] = frame.Result
 				}
 			} else {
-				// 非关键字字段的处理，TODO: 试试能不能把Target的赋值逻辑移动到default里
+				// 非关键字字段的处理
 				var resultValue any
 				if assistRes, ok := frame.SharedMemo["assist_result"]; ok {
 					// 如果存在辅助结果，使用辅助结果作为值
@@ -187,7 +186,6 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 		frame.SubNodeIter.Next()
 		subNodeField, subNode = subNodePair.First, subNodePair.Second
 		subNodeFieldName := common.NormalizeFieldName(subNodeField.String())
-		// frame.CurSubNodeFieldName = subNodeFieldName
 
 		// 处理模板语法关键字
 		keyword, statement := keywords.DetectKeyword(subNodeFieldName)
@@ -212,13 +210,12 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 		case subNode.IsObject():
 			// 如果是对象类型，需要创建新的解析帧并压入栈中，继续深度遍历
 			frameStack.Push(&model.ParseFrame{
-				Node:          &subNode,
-				FieldName:     subNodeFieldName,
-				Target:        frame.Result,
-				Result:        lo.TernaryF(subNode.IsArray(), func() any { return ptr.Of(make([]any, 0)) }, func() any { return make(map[string]any) }),
-				IsArrayResult: subNode.IsArray(),
-				SharedMemo:    frame.SharedMemo,
-				SubNodeIter:   common.FlattenNode(&subNode).First(),
+				Node:        &subNode,
+				FieldName:   subNodeFieldName,
+				Target:      frame.Result,
+				Result:      lo.TernaryF(subNode.IsArray(), func() any { return ptr.Of(make([]any, 0)) }, func() any { return make(map[string]any) }),
+				SharedMemo:  frame.SharedMemo,
+				SubNodeIter: common.FlattenNode(&subNode).First(),
 				CondContext: &model.ConditionalContext{
 					IsMatched: false,
 				},
@@ -231,8 +228,7 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 				arr        = subNode.Array()
 				target any = ptr.Of(make([]any, 0))
 			)
-			if frame.IsArrayResult {
-				result := frame.Result.(*[]any)
+			if result, ok := frame.Result.(*[]any); ok {
 				*result = append(*result, target)
 			} else {
 				frame.Result.(map[string]any)[subNodeFieldName] = target
@@ -240,34 +236,33 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 
 			for i := len(arr) - 1; i >= 0; i-- {
 				frameStack.Push(&model.ParseFrame{
-					Node:          &arr[i],
-					FieldName:     subNodeFieldName,
-					Target:        target,
-					Result:        lo.TernaryF(arr[i].IsArray(), func() any { return ptr.Of(make([]any, 0)) }, func() any { return make(map[string]any) }),
-					IsArrayResult: arr[i].IsArray(),
-					SharedMemo:    frame.SharedMemo,
-					SubNodeIter:   common.FlattenNode(&arr[i]).First(),
+					Node:        &arr[i],
+					FieldName:   subNodeFieldName,
+					Target:      target,
+					Result:      lo.TernaryF(arr[i].IsArray(), func() any { return ptr.Of(make([]any, 0)) }, func() any { return make(map[string]any) }),
+					SharedMemo:  frame.SharedMemo,
+					SubNodeIter: common.FlattenNode(&arr[i]).First(),
 					CondContext: &model.ConditionalContext{
 						IsMatched: false,
 					},
 				})
 			}
 		default:
-			if frame.IsVarAssigning() {
+			if frame.IsAssigningVariable() {
 				// 正在进行变量赋值
 				p.localVariables[subNodeFieldName] = p.dataset[subNodeFieldName]
 				p.dataset[subNodeFieldName] = p.replaceExpression(ctx, &subNode)
 				slog.InfoContext(ctx, fmt.Sprintf("[parser.assignVariables](trace) create variable,\nkey = %s,\nvalue = %s,\nexpr = %s", subNodeFieldName, util.GenerateStructFormattedString(p.dataset[subNodeFieldName]), subNode.String()))
+			} else if frame.IsExecutingOperation() {
+				// 正在执行操作语句
+				
+
 			} else if frame.IsConditionalMatched() {
 				// 条件语句匹配成功，使用条件匹配值
 				frame.Result = p.replaceExpression(ctx, frame.CondContext.MatchedValue)
-				// } else if subNodeFieldName == "" {
-				// 	// 无字段名，直接设置结果
-				// 	frame.Result = p.replaceExpression(ctx, &subNode)
 			} else {
 				// 有字段名，设置结果的对应字段
-				if frame.IsArrayResult {
-					result := frame.Result.(*[]any)
+				if result, ok := frame.Result.(*[]any); ok {
 					*result = append(*result, p.replaceExpression(ctx, &subNode))
 				} else {
 					frame.Result.(map[string]any)[subNodeFieldName] = p.replaceExpression(ctx, &subNode)
@@ -285,14 +280,8 @@ func (p *Parser) replaceExpression(ctx context.Context, input *model.TNode) any 
 	if input == nil || !input.Exists() {
 		return nil
 	}
-	// JSON 共有 6 种类型：array, bool, number, null, string
+	// JSON 共有 4 种类型: bool, number, null, string
 	switch {
-	case input.IsArray(): // array
-		var result []any
-		for _, value := range input.Array() {
-			result = append(result, p.replaceExpression(ctx, &value))
-		}
-		return result
 	case input.IsBool(): // bool
 		return input.Bool()
 	case input.Type == gjson.Number: // number
@@ -300,6 +289,6 @@ func (p *Parser) replaceExpression(ctx context.Context, input *model.TNode) any 
 	case input.Type == gjson.Null: // null
 		return nil
 	default: // string
-		return p.exprHandler.EvaluateExpressionsInText(ctx, p.compiledExps, input.String()) // 使用数据集中的值替换text中的${Path.Var}
+		return p.exprHandler.EvaluateExpressionsInText(ctx, input.String()) // 使用数据集中的值替换字符串中的变量
 	}
 }

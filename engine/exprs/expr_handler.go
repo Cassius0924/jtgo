@@ -14,10 +14,11 @@ import (
 )
 
 type ExprHandler struct {
-	templateID string
-	template   string
-	env        map[string]any
-	fns        map[string]any
+	templateID   string
+	template     string
+	compiledExps map[string]*vm.Program
+	env          map[string]any
+	fns          map[string]any
 }
 
 // NewExprHandler 创建一个新的ExprHandler实例
@@ -29,9 +30,14 @@ func NewExprHandler(templateID, template string, fns map[string]any) *ExprHandle
 	}
 }
 
+// SetCompiledExps 设置编译过的表达式
+func (h *ExprHandler) SetCompiledExps(compiledExps map[string]*vm.Program) {
+	h.compiledExps = compiledExps
+}
+
 // SetDataset 设置数据集
 func (h *ExprHandler) SetDataset(dataset map[string]any) {
-	// 把dataset和函数合并到env中
+	// 把数据集和函数f合并到env中
 	maps.Copy(dataset, h.fns)
 	h.env = dataset
 }
@@ -43,8 +49,8 @@ func (h *ExprHandler) Run(ctx context.Context, program *vm.Program) (any, error)
 }
 
 // EvaluateExpression 计算表达式
-func (h *ExprHandler) EvaluateExpression(ctx context.Context, compiledExps map[string]*vm.Program, expression string) (any, error) {
-	program, ok := compiledExps[expression]
+func (h *ExprHandler) EvaluateExpression(ctx context.Context, expression string) (any, error) {
+	program, ok := h.compiledExps[expression]
 	if !ok {
 		slog.ErrorContext(ctx, "[exprs.EvaluateExpression] compiledExps not found, please check code", "expression", expression)
 		return nil, werror.ErrCompiledExpressionNotFound
@@ -60,12 +66,12 @@ func (h *ExprHandler) EvaluateExpression(ctx context.Context, compiledExps map[s
 }
 
 // EvaluateExpressionsInText 计算文案中的表达式并且拼接
-func (h *ExprHandler) EvaluateExpressionsInText(ctx context.Context, compiledExps map[string]*vm.Program, input string) any {
+func (h *ExprHandler) EvaluateExpressionsInText(ctx context.Context, input string) any {
 	text := strings.TrimSpace(input)
-	exps := ExtractAllExpressions(text) // 找到text中所有${Path.Var}中的Path.Var
-	// 除表达式外，还有其他字符的场景，一定是字符串，例如 "活动名为${Activity.Title}"
+	exps := ExtractAllExpressions(text) // 找到text中所有${variable}中的variable
+	// 除表达式外，还有其他字符的场景，一定是字符串
 	for _, exp := range exps {
-		result, err := h.EvaluateExpression(ctx, compiledExps, exp)
+		result, err := h.EvaluateExpression(ctx, exp)
 		if err != nil {
 			input = strings.ReplaceAll(input, fmt.Sprintf(expressionFormat, exp), "")
 			continue
@@ -88,8 +94,8 @@ func (h *ExprHandler) EvaluateExpressionsInText(ctx context.Context, compiledExp
 }
 
 // EvaluateExpressionToBool 计算表达式并且转换为bool
-func (h *ExprHandler) EvaluateExpressionToBool(ctx context.Context, compiledExps map[string]*vm.Program, expression string) (bool, error) {
-	result, err := h.EvaluateExpression(ctx, compiledExps, expression)
+func (h *ExprHandler) EvaluateExpressionToBool(ctx context.Context, expression string) (bool, error) {
+	result, err := h.EvaluateExpression(ctx, expression)
 	if err != nil {
 		return false, err
 	}

@@ -17,7 +17,6 @@ type ParseFrame struct {
 	FieldName     string         // 当前帧的字段名
 	Target        any            // 父帧的解析结果，指向父帧的 Result
 	Result        any            // 本帧的解析结果
-	IsArrayResult bool           // 本帧的解析结果是否是数组
 	SharedMemo    map[string]any // 帧与帧之间的共享数据的备忘录，类似一个全局变量
 
 	SubNodeIter *vector.VectorIterator[*ds.Pair[TNode, TNode]] // 当前帧的子节点迭代器
@@ -26,16 +25,29 @@ type ParseFrame struct {
 	LoopContext *LoopContext        // 当前帧的循环上下文信息
 }
 
+// IsConditionalMatched 是否匹配到了条件
 func (f *ParseFrame) IsConditionalMatched() bool {
 	return f.CondContext != nil && f.CondContext.IsMatched && !(f.SharedMemo["no_match"] == true)
 }
 
+// HasLoopContext 是否存在循环上下文
 func (f *ParseFrame) HasLoopContext() bool {
 	return f.LoopContext != nil
 }
 
-func (f *ParseFrame) IsVarAssigning() bool {
-	return f.SharedMemo["var_assigning"] == true
+// ShouldTraverseAllSubNodes 是否需要遍历完所有节点
+func (f *ParseFrame) ShouldTraverseAllSubNodes() bool {
+	return f.IsAssigningVariable() || f.IsExecutingOperation()
+}
+
+// IsAssigningVariable 是否正在赋值变量
+func (f *ParseFrame) IsAssigningVariable() bool {
+	return f.SharedMemo["assigning_variable"] == true
+}
+
+// IsExecutingOperation 是否正在执行操作
+func (f *ParseFrame) IsExecutingOperation() bool {
+	return f.SharedMemo["executing_operation"] == true
 }
 
 // ResetBranches 重置分支状态
@@ -89,7 +101,7 @@ type LoopContext struct {
 }
 
 func NewLoopContext() *LoopContext {
-	return &LoopContext{ }
+	return &LoopContext{}
 }
 
 // LoopMeta 循环元数据，用于存储循环的键、值和对象的变量名

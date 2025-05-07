@@ -6,69 +6,30 @@ import (
 	"log/slog"
 	"reflect"
 
-	"github.com/cassius0924/jtgo/engine/common"
-	"github.com/cassius0924/jtgo/engine/exprs"
 	"github.com/cassius0924/jtgo/engine/keywords"
 	"github.com/cassius0924/jtgo/engine/model"
 	"github.com/cassius0924/jtgo/util"
 	"github.com/cassius0924/jtgo/util/ptr"
 	"github.com/cassius0924/jtgo/werror"
-	"github.com/tidwall/gjson"
 )
 
-// execOperations 处理DO操作
-func (p *Parser) execOperations(ctx context.Context, node *model.TNode) {
-	if !node.Exists() {
-		return
-	}
-	switch {
-	case node.IsArray(): // 是数组，则遍历处理
-		node.ForEach(func(_, value model.TNode) bool {
-			if value.Type != gjson.String {
-				return true
-			}
-			slog.InfoContext(ctx, fmt.Sprintf("[parser.doOperations](trace) do operation in array,\noperation = %s", value.String()))
-			p.exprHandler.EvaluateExpressionsInText(ctx, p.compiledExps, value.String())
-			return true
-		})
-	case node.IsObject():
-		node.ForEach(func(key, value model.TNode) bool {
-			// key是表达式，value是操作
-			keyName := common.NormalizeFieldName(key.String())
-			expression, isExpression := exprs.ExtractExpression(keyName)
-			if !isExpression { // 不是表达式，则跳过
-				slog.WarnContext(ctx, "[parser.doOperations] key is not an expression, please check if the key is an expression!", "key", keyName)
-				return true
-			}
-			isBoolResult, err := p.exprHandler.EvaluateExpressionToBool(ctx, p.compiledExps, expression)
-			if err != nil {
-				p.err = err
-				return true
-			}
-			if isBoolResult {
-				slog.InfoContext(ctx, "[parser.doOperations] matched expression, nested do operation", "matchedExpression", expression)
-				p.execOperations(ctx, &value)
-				return false
-			}
-			return true
-		})
-	case node.Type == gjson.String:
-		slog.InfoContext(ctx, fmt.Sprintf("[parser.doOperations](trace) do operation.\noperation = %s", node.String()))
-		p.exprHandler.EvaluateExpressionsInText(ctx, p.compiledExps, node.String())
-	default:
-		return
-	}
+// execOperations 处理 exec 操作
+func (p *Parser) execOperations(ctx context.Context, node *model.TNode, frame *model.ParseFrame) bool {
+	frame.SharedMemo["executing_operation"] = true
+	slog.InfoContext(ctx, fmt.Sprintf("[parser.execOperations](trace) start exec operations,\nkey = %s,\nvalue = %s", frame.FieldName, node.String()))
+	return true
 }
 
+// returnResult 处理 return 操作
 func (p *Parser) returnResult(ctx context.Context, node *model.TNode) any {
 	result := p.replaceExpression(ctx, node)
 	slog.InfoContext(ctx, fmt.Sprintf("[parser.returnResult](trace) return result,\nresult = %s", util.GenerateStructFormattedString(result)))
 	return result
 }
 
-// assignVariables 处理VAR变量赋值
+// assignVariables 处理 var 变量赋值
 func (p *Parser) assignVariables(ctx context.Context, node *model.TNode, frame *model.ParseFrame) bool {
-	frame.SharedMemo["var_assigning"] = true
+	frame.SharedMemo["assigning_variable"] = true
 	slog.InfoContext(ctx, fmt.Sprintf("[parser.assignVariables](trace) start assign variables,\nkey = %s,\nvalue = %s", frame.FieldName, node.String()))
 	return true
 }
@@ -79,7 +40,7 @@ func (p *Parser) judgeConditionalIf(ctx context.Context, node *model.TNode, expr
 	frame.ResetMatched()
 
 	// 表达式计算为bool值
-	matched, err := p.exprHandler.EvaluateExpressionToBool(ctx, p.compiledExps, expression)
+	matched, err := p.exprHandler.EvaluateExpressionToBool(ctx, expression)
 	if err != nil {
 		p.err = err
 	}
@@ -108,7 +69,7 @@ func (p *Parser) judgeConditionalElif(ctx context.Context, node *model.TNode, ex
 		return false
 	}
 
-	matched, err := p.exprHandler.EvaluateExpressionToBool(ctx, p.compiledExps, expression)
+	matched, err := p.exprHandler.EvaluateExpressionToBool(ctx, expression)
 	if err != nil {
 		p.err = err
 	}
@@ -237,7 +198,7 @@ func (p *Parser) initLoopContext(ctx context.Context, statement string, frame *m
 	}
 
 	// 取出编译期解析的循环对象
-	object, err := p.exprHandler.EvaluateExpression(ctx, p.compiledExps, loopMeta.Object)
+	object, err := p.exprHandler.EvaluateExpression(ctx, loopMeta.Object)
 	if err != nil {
 		slog.ErrorContext(ctx, "[parser.initLoopContext] exprRun when getting loop object", "statement", statement, "error", err)
 		return err

@@ -31,18 +31,18 @@ var (
 	templateIDToLoopMeta     sync.Map // 缓存循环元数据集合
 	templateIDToCustomFuncs  sync.Map // 自定义函数集合
 
-	builtInFuncCollection = make(map[string]any) // 引擎内置函数集合
+	builtInFns = make(map[string]any) // 引擎内置函数集合
 )
 
 type JTEngine struct {
-	ctx            context.Context
-	templateID     string
-	template       string
-	entry          string
-	dataset        map[string]any
-	target         any
-	compiledExps   map[string]*vm.Program     // 缓存编译过的表达式
-	loopMetas      map[string]*model.LoopMeta // 循环语句元数据
+	ctx          context.Context
+	templateID   string
+	template     string
+	entry        string
+	dataset      map[string]any
+	target       any
+	compiledExps map[string]*vm.Program     // 缓存编译过的表达式
+	loopMetas    map[string]*model.LoopMeta // 循环语句元数据
 
 	exprHandler *exprs.ExprHandler // 表达式处理器
 	compiler    *compiler.Compiler // 模板编译器
@@ -114,7 +114,7 @@ func GetJSONTemplateEngine(ctx context.Context, templateID, template string) (*J
 
 		var (
 			cachedCompiledExps map[string]*vm.Program
-			cachedCustomFuncs  map[string]any
+			cachedCustomFns  map[string]any
 			cachedLoopMeta     map[string]*model.LoopMeta
 		)
 		if compiledExps, ok := templateIDToCompiledExps.LoadOrStore(templateID, make(map[string]*vm.Program)); ok {
@@ -124,7 +124,7 @@ func GetJSONTemplateEngine(ctx context.Context, templateID, template string) (*J
 			return nil, werror.ErrCachedCompiledExpressionsNotFound
 		}
 		if customFuncs, ok := templateIDToCustomFuncs.LoadOrStore(templateID, make(map[string]any)); ok {
-			cachedCustomFuncs = customFuncs.(map[string]any)
+			cachedCustomFns = customFuncs.(map[string]any)
 		} else {
 			slog.ErrorContext(ctx, "[core.GetJSONTemplateEngine] cached custom functions not found", "templateID", templateID)
 			return nil, werror.ErrCachedCustomFunctionsNotFound
@@ -136,17 +136,17 @@ func GetJSONTemplateEngine(ctx context.Context, templateID, template string) (*J
 			return nil, werror.ErrCachedLoopMetaNotFound
 		}
 
-		fns := lo.Assign(builtInFuncCollection, cachedCustomFuncs)
+		fns := lo.Assign(builtInFns, cachedCustomFns)
 		exprHandler := exprs.NewExprHandler(templateID, template, fns)
 
 		// 使用缓存的编译过的表达式
 		return &JTEngine{
-			ctx:            ctx,
-			templateID:     templateID,
-			entry:          defaultEntry,
-			template:       template,
-			compiledExps:   cachedCompiledExps, // 使用原缓存编译过的表达式
-			loopMetas:      cachedLoopMeta,     // 使用原缓存循环元数据
+			ctx:          ctx,
+			templateID:   templateID,
+			entry:        defaultEntry,
+			template:     template,
+			compiledExps: cachedCompiledExps, // 使用原缓存编译过的表达式
+			loopMetas:    cachedLoopMeta,     // 使用原缓存循环元数据
 
 			exprHandler: exprHandler,
 			parser:      parser.NewParser(exprHandler, cachedCompiledExps, cachedLoopMeta),
@@ -161,15 +161,15 @@ func GetJSONTemplateEngine(ctx context.Context, templateID, template string) (*J
 func createJSONTemplateEngine(ctx context.Context, templateID, template string) (*JTEngine, error) {
 	var (
 		customFns, _ = templateIDToCustomFuncs.LoadOrStore(templateID, make(map[string]any))
-		fns          = lo.Assign(builtInFuncCollection, customFns.(map[string]any)) // 合并内置函数和自定义函数
+		fns          = lo.Assign(builtInFns, customFns.(map[string]any)) // 合并内置函数和自定义函数
 		exprHandler  = exprs.NewExprHandler(templateID, template, fns)
 	)
 
 	engine := &JTEngine{
-		ctx:            ctx,
-		templateID:     templateID,
-		entry:          defaultEntry,
-		template:       template,
+		ctx:        ctx,
+		templateID: templateID,
+		entry:      defaultEntry,
+		template:   template,
 
 		exprHandler: exprHandler,
 		compiler:    compiler.NewCompiler(exprHandler),
@@ -184,6 +184,7 @@ func createJSONTemplateEngine(ctx context.Context, templateID, template string) 
 	// 迭代编译完成后，获取编译过的表达式和循环元数据
 	engine.compiledExps = engine.compiler.GetCompiledExps()
 	engine.loopMetas = engine.compiler.GetLoopMetas()
+	exprHandler.SetCompiledExps(engine.compiledExps)
 	// 创建模板解析器
 	engine.parser = parser.NewParser(exprHandler, engine.compiledExps, engine.loopMetas)
 

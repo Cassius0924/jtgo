@@ -18,13 +18,13 @@ func RegisterFunction(templateID string, fn any) {
 }
 
 func RegisterFunctionWithAlias(fn any, fnName string) {
-	builtInFuncCollection[fnName] = fn
+	builtInFns[fnName] = fn
 }
 
 func RegisterBuiltInFunction(fn any) {
-	registerFunction(builtInFuncCollection, fn)
+	registerFunction(builtInFns, fn)
 }
 
 func RegisterBuiltInFunctionWithAlias(fn any, fnName string) {
-	builtInFuncCollection[fnName] = fn
+	builtInFns[fnName] = fn
 }

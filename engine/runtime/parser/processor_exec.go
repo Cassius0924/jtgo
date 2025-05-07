@@ -13,7 +13,5 @@ type ExecProcessor struct {
 
 // Process 执行操作处理逻辑
 func (p *ExecProcessor) Process(ctx context.Context, node *model.TNode, statement string, frame *model.ParseFrame, parser *Parser) bool {
-	parser.execOperations(ctx, node)
-	// 执行操作后不需要继续处理
-	return false
+	return parser.execOperations(ctx, node, frame)
 }
