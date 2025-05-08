@@ -1007,7 +1007,9 @@ func TestEngine_ExecString(t *testing.T) {
 		"@exec": "${Inc(a)}",
 		"value": {
 			"@exec": "${Inc(a)}",
-			"name": "${a}"
+			"num": "${a}",
+			"str": "_${a}_",
+			"@exec": "${Inc(a)}"
 		}
 	}
 }
@@ -1025,7 +1027,8 @@ func TestEngine_ExecString(t *testing.T) {
 		So(result, ShouldEqualJSON, `
 {
 	"value": {
-		"name": 2
+		"num": 3,
+		"str": "_2_"
 	}
 }
 `)

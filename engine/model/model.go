@@ -13,6 +13,7 @@ import (
 type TNode struct {
 	gjson.Result
 	NodeFlag *ds.Flag[NodeFlag] // 节点标志位
+	// TODO: 增加 ParentNode 节点指针，优化代码
 }
 
 // NewTNode 创建一个新的模板节点
