@@ -844,6 +844,38 @@ func TestEngine_Var(t *testing.T) {
 	})
 }
 
+func TestEngine_VarWithError(t *testing.T) {
+	Convey("TestEngine_VarWithError", t, func() {
+		tmpl := `
+{
+	"_main_": {
+		"@var": "wrong",
+		"name": {
+			"value": "${a}"
+		}
+	}
+}
+`
+		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_VarWithError", tmpl)
+		So(err, ShouldBeNil)
+
+		dataset := map[string]any{
+			"a": "hello",
+		}
+
+		result, _ := engine.WithDataset(dataset).Run()
+
+		So(result, ShouldEqualJSON, `
+{
+	"name": {
+		"value": "hello"
+	}
+}
+`)
+
+	})
+}
+
 func TestEngine_VarWithIf(t *testing.T) {
 	Convey("TestEngine_VarWithIf", t, func() {
 		// TODO: 限制不能if套var，仅可var套if
@@ -967,8 +999,42 @@ func TestEngine_TemplateInList(t *testing.T) {
 	})
 }
 
-func TestEngine_Exec(t *testing.T) {
-	Convey("TestEngine_Exec", t, func() {
+func TestEngine_ExecString(t *testing.T) {
+	Convey("TestEngine_ExecString", t, func() {
+		tmpl := `
+{
+	"_main_": {
+		"@exec": "${Inc(a)}",
+		"value": {
+			"@exec": "${Inc(a)}",
+			"name": "${a}"
+		}
+	}
+}
+`
+		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_ExecString", tmpl)
+		So(err, ShouldBeNil)
+
+		a := 0
+		dataset := map[string]any{
+			"a": &a,
+		}
+
+		result, _ := engine.WithDataset(dataset).Run()
+
+		So(result, ShouldEqualJSON, `
+{
+	"value": {
+		"name": 2
+	}
+}
+`)
+
+	})
+}
+
+func TestEngine_ExecArray(t *testing.T) {
+	Convey("TestEngine_ExecArray", t, func() {
 		tmpl := `
 {
 	"_main_": {
@@ -985,7 +1051,7 @@ func TestEngine_Exec(t *testing.T) {
 	}
 }
 `
-		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_Exec", tmpl)
+		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_ExecArray", tmpl)
 		So(err, ShouldBeNil)
 
 		a := 0

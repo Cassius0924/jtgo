@@ -23,7 +23,7 @@ type Compiler struct {
 
 type CompileFrame struct {
 	Node        *model.TNode
-	SubNodeIter *vector.VectorIterator[*ds.Pair[model.TNode, model.TNode]]
+	SubNodeIter *vector.VectorIterator[*ds.Pair[*model.TNode, *model.TNode]]
 }
 
 func NewCompiler(exprHandler *exprs.ExprHandler) *Compiler {
@@ -42,7 +42,7 @@ func (c *Compiler) Compile(ctx context.Context, template string) error {
 	}
 
 	// 迭代编译模板
-	err := c.iterativeCompile(ctx, &templateNode)
+	err := c.iterativeCompile(ctx, model.NewTNode(templateNode))
 	if err != nil {
 		slog.ErrorContext(ctx, "[JSONTemplateEngine.iterativeCompile] pre compile configJSON error", "error", err)
 		return err
@@ -124,16 +124,17 @@ func (c *Compiler) iterativeCompile(ctx context.Context, templateNode *model.TNo
 		case object.IsObject():
 			// 如果是对象类型，将其压入栈中继续处理
 			frameStack.Push(&CompileFrame{
-				Node:        &object,
-				SubNodeIter: common.FlattenNode(&object).First(),
+				Node:        object,
+				SubNodeIter: common.FlattenNode(object).First(),
 			})
 		case object.IsArray():
 			// 如果是数组类型，遍历数组中的每个元素并压入栈中
-			object.ForEach(func(_, value model.TNode) bool {
+			object.ForEach(func(_, value gjson.Result) bool {
 				if value.IsObject() || value.IsArray() {
+					valueNode := model.NewTNode(value)
 					frameStack.Push(&CompileFrame{
-						Node:        &value,
-						SubNodeIter: common.FlattenNode(&value).First(),
+						Node:        valueNode,
+						SubNodeIter: common.FlattenNode(valueNode).First(),
 					})
 				} else if !value.IsBool() && value.Type != gjson.Number && value.Type != gjson.Null {
 					// 处理字符串类型的值

@@ -52,7 +52,7 @@ func (p *Parser) Parse(ctx context.Context, template, entry string, target any) 
 	}
 
 	// 循环解析方法
-	result := p.iterativeParse(ctx, &entryTemplateNode, entry)
+	result := p.iterativeParse(ctx, model.NewTNode(entryTemplateNode), entry)
 	resultStr := util.SonicToString(result)
 
 	if target != nil {
@@ -105,16 +105,13 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 		SharedMemo:  make(map[string]any, 2),
 		Path:        templateFieldName,
 		SubNodeIter: common.FlattenNode(templateNode).First(), // 子节点迭代器
-		CondContext: &model.ConditionalContext{ // 条件上下文
-			IsMatched: false, // 初始状态未匹配
-		},
 	})
 
 	// 迭代解析，直到栈为空
 	for frameStack.Size() > 0 {
 		var (
 			frame                 = frameStack.Top() // 获取栈顶帧
-			subNodeField, subNode model.TNode        // 子节点字段名和子节点
+			subNodeField, subNode *model.TNode       // 子节点字段名和子节点
 		)
 
 		// 以下三种情况需要弹出当前帧:
@@ -167,21 +164,15 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 					resultValue = frame.Result
 				}
 				// 将结果设置到父帧的目标中
-				if target, ok := frame.Target.(*[]any); ok {
-					// 如果目标是数组类型，直接追加结果
-					*target = append(*target, resultValue)
-				} else {
-					frame.Target.(map[string]any)[frame.FieldName] = resultValue
-				}
+				frame.PutTarget(resultValue)
 			}
 			continue
 		}
 		frame.SharedMemo["no_match"] = false
 
 		// 取出当前子节点，并将迭代器指向下一个元素
-		subNodePair := frame.SubNodeIter.Value()
+		subNodeField, subNode = frame.ExtractSubNodePair()
 		frame.SubNodeIter.Next()
-		subNodeField, subNode = subNodePair.First, subNodePair.Second
 		subNodeFieldName := common.NormalizeFieldName(subNodeField.String())
 
 		// 处理模板语法关键字
@@ -196,7 +187,7 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 			}
 
 			// 如果处理器返回false，表示不需要继续处理当前节点
-			processCurrentNode := processor.Process(ctx, &subNode, statement, frame, p)
+			processCurrentNode := processor.Process(ctx, subNode, statement, frame, p)
 			if !processCurrentNode {
 				continue
 			}
@@ -207,38 +198,32 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 		case subNode.IsObject() || subNode.IsArray():
 			// Object 和 Array，需要创建新的解析帧并压入栈中，继续深度遍历
 			frameStack.Push(&model.ParseFrame{
-				Node:        &subNode,
+				Node:        subNode,
 				FieldName:   subNodeFieldName,
 				Target:      frame.Result,
 				Result:      lo.TernaryF(subNode.IsArray(), func() any { return ptr.Of(make([]any, 0)) }, func() any { return make(map[string]any) }),
 				SharedMemo:  frame.SharedMemo,
 				Path:        frame.BuildNodePath(subNodeFieldName),
-				SubNodeIter: common.FlattenNode(&subNode).First(),
-				CondContext: &model.ConditionalContext{
-					IsMatched: false,
-				},
+				SubNodeIter: common.FlattenNode(subNode).First(),
 			})
 			continue
 		default:
 			if frame.InVarScope() {
 				// 在 var 作用域
 				p.localVariables[subNodeFieldName] = p.dataset[subNodeFieldName]
-				p.dataset[subNodeFieldName] = p.transformNodeToValue(ctx, &subNode)
-				slog.InfoContext(ctx, fmt.Sprintf("[parser.assignVariables](trace) create variable,\nkey = %s,\nvalue = %s,\nexpr = %s", subNodeFieldName, util.GenerateStructFormattedString(p.dataset[subNodeFieldName]), subNode.String()))
-			} else if frame.InExecScope() {
+				p.dataset[subNodeFieldName] = p.transformNodeToValue(ctx, subNode)
+				slog.InfoContext(ctx, fmt.Sprintf("[parser.iterativeParse](trace) assign variable,\nkey = %s,\nvalue = %s,\nexpr = %s", subNodeFieldName, util.GenerateStructFormattedString(p.dataset[subNodeFieldName]), subNode.String()))
+			} else if frame.InExecScope() || subNode.NodeFlag.Has(model.NodeFlagExecOnce) {
 				// 在 exec 作用域
-				p.executeOperationsOnNode(ctx, &subNode)
-				slog.InfoContext(ctx, fmt.Sprintf("[parser.execOperations](trace) execute operation,\nkey = %s,\nvalue = %s,\nexpr = %s", subNodeFieldName, util.GenerateStructFormattedString(p.dataset[subNodeFieldName]), subNode.String()))
+				p.executeOperationsOnNode(ctx, subNode)
+				slog.InfoContext(ctx, fmt.Sprintf("[parser.iterativeParse](trace) execute operation,\nkey = %s,\nvalue = %s,\nexpr = %s", subNodeFieldName, util.GenerateStructFormattedString(p.dataset[subNodeFieldName]), subNode.String()))
 			} else if frame.IsConditionalMatched() {
 				// 条件语句匹配成功，使用条件匹配值
 				frame.Result = p.transformNodeToValue(ctx, frame.CondContext.MatchedValue)
+				slog.InfoContext(ctx, fmt.Sprintf("[parser.iterativeParse](trace) condition matched,\nkey = %s,\nvalue = %s", subNodeFieldName, util.GenerateStructFormattedString(frame.Result)))
 			} else {
 				// 有字段名，设置结果的对应字段
-				if result, ok := frame.Result.(*[]any); ok {
-					*result = append(*result, p.transformNodeToValue(ctx, &subNode))
-				} else {
-					frame.Result.(map[string]any)[subNodeFieldName] = p.transformNodeToValue(ctx, &subNode)
-				}
+				frame.PutResult(subNodeFieldName, p.transformNodeToValue(ctx, subNode))
 			}
 			continue
 		}

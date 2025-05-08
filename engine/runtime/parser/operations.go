@@ -11,13 +11,27 @@ import (
 	"github.com/cassius0924/jtgo/util"
 	"github.com/cassius0924/jtgo/util/ptr"
 	"github.com/cassius0924/jtgo/werror"
+	"github.com/tidwall/gjson"
 )
 
-// execOperations 处理 exec 操作
-func (p *Parser) execOperations(ctx context.Context, node *model.TNode, frame *model.ParseFrame) bool {
-	frame.SharedMemo["executing_operation"] = true
-	slog.InfoContext(ctx, fmt.Sprintf("[parser.execOperations](trace) start exec operations,\nkey = %s,\nvalue = %s", frame.FieldName, node.String()))
-	return true
+// executeOperations 处理 exec 操作
+func (p *Parser) executeOperations(ctx context.Context, node *model.TNode, frame *model.ParseFrame) bool {
+	var (
+		processCurrentNode = false
+	)
+	// @exec 允许 node 为 Object、Array、String
+	if node.IsObject() || node.IsArray() {
+		frame.SharedMemo["executing_operation"] = true
+		slog.InfoContext(ctx, fmt.Sprintf("[parser.executeOperations](trace) start exec operations,\nkey = %s,\nvalue = %s", frame.FieldName, node.String()))
+		processCurrentNode = true
+	} else if node.Type == gjson.String {
+		// 对于字符串，由于不会创建新解析帧，所以这里使用 NodeFlag 来标记
+		node.NodeFlag.Set(model.NodeFlagExecOnce)
+		slog.InfoContext(ctx, fmt.Sprintf("[parser.executeOperations](trace) set the exec once node flag,\nkey = %s,\nvalue = %s", frame.FieldName, node.String()))
+		processCurrentNode = true
+	}
+
+	return processCurrentNode
 }
 
 // returnResult 处理 return 操作
@@ -29,15 +43,21 @@ func (p *Parser) returnResult(ctx context.Context, node *model.TNode) any {
 
 // assignVariables 处理 var 变量赋值
 func (p *Parser) assignVariables(ctx context.Context, node *model.TNode, frame *model.ParseFrame) bool {
-	frame.SharedMemo["assigning_variable"] = true
-	slog.InfoContext(ctx, fmt.Sprintf("[parser.assignVariables](trace) start assign variables,\nkey = %s,\nvalue = %s", frame.FieldName, node.String()))
-	return true
+	var (
+		processCurrentNode = false
+	)
+	// @var 只允许 node 为 Object
+	if node.IsObject() {
+		frame.SharedMemo["assigning_variable"] = true
+		processCurrentNode = true
+		slog.InfoContext(ctx, fmt.Sprintf("[parser.assignVariables](trace) start assign variables,\nkey = %s,\nvalue = %s", frame.FieldName, node.String()))
+	}
+	return processCurrentNode
 }
 
 // judgeConditionalIf 处理if条件判断，返回是否命中该条件
 func (p *Parser) judgeConditionalIf(ctx context.Context, node *model.TNode, expression string, frame *model.ParseFrame) bool {
-	// 重置MatchedValue
-	frame.ResetMatched()
+	frame.CondContext = model.NewConditionalContext()
 
 	// 表达式计算为bool值
 	matched, err := p.exprHandler.EvaluateExpressionToBool(ctx, expression)
@@ -51,14 +71,13 @@ func (p *Parser) judgeConditionalIf(ctx context.Context, node *model.TNode, expr
 		frame.CondContext.IsMatched = true
 	}
 
-	frame.CondContext.HasIfBranch = true
 	slog.InfoContext(ctx, fmt.Sprintf("[parser.judgeConditionalIf](trace) condition evaluate result,\nkey = %s,\nvalue = %s,\nexpr = %s", frame.FieldName, node.String(), expression))
 	return matched
 }
 
 // judgeConditionalElif 处理elif条件判断，返回是否命中该条件
 func (p *Parser) judgeConditionalElif(ctx context.Context, node *model.TNode, expression string, frame *model.ParseFrame) bool {
-	if !frame.CondContext.HasIfBranch {
+	if frame.CondContext == nil {
 		// 是孤儿 elif 则视为 false
 		slog.WarnContext(ctx, "[parser.judgeConditionalElif] this elif is orphan, please check if the elif belongs to an if!", "key", frame.FieldName)
 		return false
@@ -79,7 +98,6 @@ func (p *Parser) judgeConditionalElif(ctx context.Context, node *model.TNode, ex
 		frame.CondContext.IsMatched = true
 	}
 
-	frame.CondContext.HasIfBranch = true
 	slog.InfoContext(ctx, fmt.Sprintf("[parser.judgeConditionalIf](trace) condition evaluate result,\nkey = %s,\nvalue = %s,\nexpr = %s", frame.FieldName, node.String(), expression))
 	return matched
 }
@@ -87,8 +105,7 @@ func (p *Parser) judgeConditionalElif(ctx context.Context, node *model.TNode, ex
 // judgeConditionalElse 处理else条件判断
 func (p *Parser) judgeConditionalElse(ctx context.Context, node *model.TNode, frame *model.ParseFrame) bool {
 	// 判断当前 else 是否是孤儿else，即当前 else 是否属于某一个 if
-	// TODO: 封装成函数
-	if !frame.CondContext.HasIfBranch {
+	if frame.CondContext == nil {
 		// 是孤儿 else 则视为 false
 		slog.WarnContext(ctx, "[parser.judgeConditionalElse] this else is orphan, please check if the else belongs to an if!", "key", frame.FieldName)
 		return false
@@ -102,8 +119,6 @@ func (p *Parser) judgeConditionalElse(ctx context.Context, node *model.TNode, fr
 	frame.CondContext.MatchedValue = node
 	frame.CondContext.IsMatched = true
 
-	// 重置条件分支的情况
-	frame.ResetBranches()
 	slog.InfoContext(ctx, fmt.Sprintf("[parser.judgeConditionalElse](trace) condition evaluate result,\nkey = %s,\nvalue = %s", frame.FieldName, node.String()))
 	return true
 }

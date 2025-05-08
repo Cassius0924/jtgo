@@ -10,7 +10,18 @@ import (
 )
 
 // TNode TemplateNode 代表一个模板节点
-type TNode = gjson.Result
+type TNode struct {
+	gjson.Result
+	NodeFlag *ds.Flag[NodeFlag] // 节点标志位
+}
+
+// NewTNode 创建一个新的模板节点
+func NewTNode(result gjson.Result) *TNode {
+	return &TNode{
+		Result:   result,
+		NodeFlag: ds.NewFlag[NodeFlag](),
+	}
+}
 
 // ParseFrame 模板引擎解析帧
 type ParseFrame struct {
@@ -21,10 +32,18 @@ type ParseFrame struct {
 	SharedMemo map[string]any // 帧与帧之间的共享数据的备忘录，类似一个全局变量
 	Path       string         // 当前帧在模板中的路径
 
-	SubNodeIter *vector.VectorIterator[*ds.Pair[TNode, TNode]] // 当前帧的子节点迭代器
+	SubNodeIter *vector.VectorIterator[*ds.Pair[*TNode, *TNode]] // 当前帧的子节点迭代器
 
 	CondContext *ConditionalContext // 当前帧的条件上下文信息
 	LoopContext *LoopContext        // 当前帧的循环上下文信息
+}
+
+// ExtractSubNodePair 提取子节点对
+func (f *ParseFrame) ExtractSubNodePair() (*TNode, *TNode) {
+	subNodePair := f.SubNodeIter.Value()
+	subNodeField, subNode := subNodePair.First, subNodePair.Second
+	return subNodeField, subNode
+
 }
 
 // IsConditionalMatched 是否匹配到了条件
@@ -52,36 +71,41 @@ func (f *ParseFrame) InExecScope() bool {
 	return f.SharedMemo["executing_operation"] == true
 }
 
-// ResetBranches 重置分支状态
-func (f *ParseFrame) ResetBranches() {
-	if f.CondContext == nil {
-		return
-	}
-	f.CondContext.HasIfBranch = false
-	f.CondContext.HasElseBranch = false
-}
-
-// ResetMatched 重置匹配状态
-func (f *ParseFrame) ResetMatched() {
-	if f.CondContext == nil {
-		return
-	}
-	f.CondContext.MatchedValue = nil
-	f.CondContext.IsMatched = false
-}
-
 // BuildNodePath 构建节点路径
 func (f *ParseFrame) BuildNodePath(fieldName string) string {
 	// TODO: 性能优化
 	return fmt.Sprintf("%s.%s", f.Path, fieldName)
 }
 
+// PutTarget 将值放入 Target
+func (f *ParseFrame) PutTarget(value any) {
+	if target, ok := f.Target.(*[]any); ok {
+		// 如果目标是数组类型，直接追加结果
+		*target = append(*target, value)
+	} else {
+		f.Target.(map[string]any)[f.FieldName] = value
+	}
+}
+
+// PutResult 将值放入 Result
+func (f *ParseFrame) PutResult(fieldName string, value any) {
+	if result, ok := f.Result.(*[]any); ok {
+		*result = append(*result, value)
+	} else {
+		f.Result.(map[string]any)[fieldName] = value
+	}
+}
+
 // ConditionalContext 条件判断上下文
 type ConditionalContext struct {
 	MatchedValue  *TNode
 	IsMatched     bool
-	HasIfBranch   bool // 是否有if分支
 	HasElseBranch bool // 是否有else分支
+}
+
+// NewConditionalContext 创建条件判断上下文
+func NewConditionalContext() *ConditionalContext {
+	return &ConditionalContext{}
 }
 
 type LoopType int
@@ -109,6 +133,7 @@ type LoopContext struct {
 	IsDone         bool             // 是否完成循环
 }
 
+// NewLoopContext 创建一个循环上下文
 func NewLoopContext() *LoopContext {
 	return &LoopContext{}
 }
