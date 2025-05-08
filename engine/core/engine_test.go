@@ -363,7 +363,7 @@ func TestEngine_LoopArray(t *testing.T) {
 {
 	"_main_": {
 		"sub_test_list": {
-			"@for key,val := a": {
+			"@for key,val in a": {
 				"name": "${key}_${val}"
 			}
 		}
@@ -407,7 +407,7 @@ func TestEngine_LoopSlice(t *testing.T) {
 {
 	"_main_": {
 		"sub_test_list": {
-			"@for idx,val := b": {
+			"@for idx,val in b": {
 				"name": "${idx}_${val}"
 			}
 		}
@@ -455,7 +455,7 @@ func TestEngine_LoopMap(t *testing.T) {
 {
 	"_main_": {
 		"name_list": {
-			"@for key,val := a": {
+			"@for key,val in a": {
 				"name": "${key}_${val}"
 			},
 			"abc": "nothing"
@@ -509,7 +509,7 @@ func TestEngine_LoopMapNoObject(t *testing.T) {
 {
 	"_main_": {
 		"name_list": {
-			"@for _,val := a": "${val}"
+			"@for _,val in a": "${val}"
 		}
 	}
 }
@@ -559,8 +559,8 @@ func TestEngine_LoopMapNested(t *testing.T) {
 {
 	"_main_": {
 		"name_list": {
-			"@for key,val := a": {
-				"@for key2,val2 := b": {
+			"@for key,val in a": {
+				"@for key2,val2 in b": {
 					"name": "${key}_${val}_${key2}_${val2}"
 				}
 			}
@@ -632,8 +632,8 @@ func TestEngine_LoopSliceNested(t *testing.T) {
 {
 	"_main_": {
 		"sub_test_list": {
-			"@for idx,val := a": {
-				"@for idx2,val2 := b": {
+			"@for idx,val in a": {
+				"@for idx2,val2 in b": {
 					"name": "${idx}_${val}_${idx2}_${val2}"
 				}
 			}
@@ -669,6 +669,98 @@ func TestEngine_LoopSliceNested(t *testing.T) {
 	]
 }
 		`)
+	})
+}
+
+func TestEngine_LoopWithError(t *testing.T) {
+	Convey("TestEngine_LoopWithError", t, func() {
+		tmpl := `
+{
+	"_main_": {
+		"value": {
+			"@for idx,val in a": {
+				"name": "${idx}_${val}"
+			},
+			"name": "wrong"
+		}
+	}
+}
+	`
+		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_LoopWithError", tmpl)
+		So(err, ShouldBeNil)
+
+		dataset := map[string]any{
+			"a": 1,
+		}
+
+		result, err := engine.WithDataset(dataset).Run()
+		So(err, ShouldNotBeNil)
+		So(result, ShouldEqualJSON, `
+		{
+			"value": {}
+		}`)
+
+	})
+}
+
+func TestEngine_ConditionalIfNestedLoop(t *testing.T) {
+	Convey("TestEngine_IfNestedLoop", t, func() {
+		tmpl := `
+{
+	"_main_": {
+		"value": {
+			"@if a": {
+				"@for idx,val in b": {
+					"name": "${idx}_${val}"
+				}
+			},
+			"@else": "hello"
+		}
+	}
+}
+	`
+		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_IfNestedLoop", tmpl)
+		So(err, ShouldBeNil)
+
+		dataset := map[string]any{
+			"a": true,
+			"b": []string{
+				"json",
+				"template",
+				"with",
+				"go",
+			},
+		}
+
+		result, _ := engine.WithDataset(dataset).Run()
+
+		So(result, ShouldEqualJSON, `
+{
+	"value": [
+		{
+			"name": "0_json"
+		},
+		{
+			"name": "1_template"
+		},
+		{
+			"name": "2_with"
+		},
+		{
+			"name": "3_go"
+		}
+	]
+}
+	`)
+
+		dataset["a"] = false
+		result, _ = engine.WithDataset(dataset).Run()
+		So(result, ShouldEqualJSON, `
+{
+	"value": "hello"
+}
+	`)
+
 	})
 }
 
@@ -875,15 +967,64 @@ func TestEngine_TemplateInList(t *testing.T) {
 	})
 }
 
+func TestEngine_Exec(t *testing.T) {
+	Convey("TestEngine_Exec", t, func() {
+		tmpl := `
+{
+	"_main_": {
+		"@exec": [
+			"${Inc(a)}",
+			"${Inc(a)}"
+		],
+		"value": {
+			"@exec": [
+				"${Inc(a)}"
+			],
+			"name": "${a}"
+		}
+	}
+}
+`
+		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_Exec", tmpl)
+		So(err, ShouldBeNil)
+
+		a := 0
+		dataset := map[string]any{
+			"a": &a,
+		}
+
+		result, _ := engine.WithDataset(dataset).Run()
+
+		So(result, ShouldEqualJSON, `
+{
+	"value": {
+		"name": 3
+	}
+}
+`)
+
+	})
+}
+
 func TestEngine_ComplexTemplate(t *testing.T) {
 	Convey("TestEngine_ComplexTemplate", t, func() {
 		tmpl := `
 {
     "_main_": {
+		"@var": {
+			"userCount": "${PtrInt(0)}"
+		},
 		"users": {
 			"@cmt": "this is a comment",
 			"@cmt": ["this is a comment", "this is a comment too"],
-            "@for idx,user := userList": {
+			"@exec": [
+				"${LogInfo('start')}"
+			],
+            "@for idx,user in userList": {
+				"@exec": [
+					"${LogInfo('parse user', 'index', idx)}",
+					"${Inc(userCount)}"
+				],
 				"@cmt": "this is a comment",
 				"num": "${idx + 1}",
                 "name": "${user.first_name} ${user.last_name}",
@@ -912,7 +1053,8 @@ func TestEngine_ComplexTemplate(t *testing.T) {
 		"@cmt": "this is a comment",
         "summary": {
 			"total": "${len(userList)}",
-			"pass_count": "${CalPassCount(userList)}"
+			"pass_count": "${CalPassCount(userList)}",
+			"user_count": "${userCount}"
         }
     }
 }
@@ -980,7 +1122,8 @@ func TestEngine_ComplexTemplate(t *testing.T) {
     ],
     "summary": {
         "total": 4,
-		"pass_count": 2
+		"pass_count": 2,
+		"user_count": 4
     }
 }
         `)

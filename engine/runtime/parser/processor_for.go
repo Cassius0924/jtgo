@@ -13,9 +13,7 @@ type ForProcessor struct {
 
 // Process 实现 for 处理逻辑
 func (p *ForProcessor) Process(ctx context.Context, node *model.TNode, statement string, frame *model.ParseFrame, parser *Parser) bool {
-	parser.executeLoop(ctx, node, statement, frame)
-	// for 循环处理完后不需要继续处理该节点
-	return false
+	return parser.executeLoop(ctx, node, statement, frame)
 }
 
 // ContinueProcessor 处理 @continue 关键字

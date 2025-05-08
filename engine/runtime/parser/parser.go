@@ -76,7 +76,7 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 	)
 
 	if !templateNode.IsObject() && !templateNode.IsArray() {
-		return p.replaceExpression(ctx, templateNode)
+		return p.transformNodeToValue(ctx, templateNode)
 	}
 
 	// 解析栈的工作原理:
@@ -96,11 +96,6 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 	// | |---------|     |---------|     |---------|
 	// |----------------------------------------------> Stack Top
 	//
-	// 特殊情况处理:
-	// - 条件语句(if/elif/else): 通过ConditionalCtx跟踪条件状态
-	// - 循环语句(for): 通过LoopCtx管理循环迭代
-	// - 变量操作(var/do): 直接执行不入栈
-	//
 	// 初始化栈，将根节点压入栈中
 	frameStack.Push(&model.ParseFrame{
 		Node:        templateNode,
@@ -108,6 +103,7 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 		Target:      result,
 		Result:      result,
 		SharedMemo:  make(map[string]any, 2),
+		Path:        templateFieldName,
 		SubNodeIter: common.FlattenNode(templateNode).First(), // 子节点迭代器
 		CondContext: &model.ConditionalContext{ // 条件上下文
 			IsMatched: false, // 初始状态未匹配
@@ -125,18 +121,23 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 		// 1. 子节点迭代器无效（已遍历完所有子节点）
 		// 2. 在不需要遍历完所有字节点的情况下，匹配到条件语句（再需要遍历完所有节点的情况，即使匹配到条件语句，也需要继续解析，直至所有子节点解析完毕）
 		// 3. 存在循环上下文（表示循环已处理完毕）
-		if !frame.SubNodeIter.IsValid() || (!frame.ShouldTraverseAllSubNodes() && frame.IsConditionalMatched()) || frame.HasLoopContext() {
+		if !frame.SubNodeIter.IsValid() || (!frame.ShouldTraverseAllSubNodes() && frame.IsConditionalMatched()) || frame.IsLoopDone() {
+			frameStack.Pop()
 			frame.SharedMemo["no_match"] = false
-			// 此处用于清空 变量赋值中 的标记
+			// 离开 var 作用域，需要清空 变量赋值中 的标记
 			if keywords.IsVarKeyword(frame.FieldName) {
 				frame.SharedMemo["assigning_variable"] = false
+				continue
 			}
-			// 此处用于清空 执行操作中 的标记
+			// 离开 exec 作用域，需要清空 执行操作中 的标记
 			if keywords.IsExecKeyword(frame.FieldName) {
 				frame.SharedMemo["executing_operation"] = false
+				continue
+			}
+			if frame.ShouldTraverseAllSubNodes() {
+				continue
 			}
 
-			frameStack.Pop()
 			// 如果栈为空，说明所有帧都已经遍历完毕，处理最终结果并返回
 			if frameStack.Size() == 0 {
 				// 如果当前字段名为空或者是循环结果，则直接返回Result
@@ -144,10 +145,6 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 					result = frame.Result
 				}
 				break
-			}
-
-			if frame.ShouldTraverseAllSubNodes() {
-				continue
 			}
 
 			// 将当前帧的结果传递给父帧
@@ -207,65 +204,40 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 
 		// 根据节点类型进行不同处理
 		switch {
-		case subNode.IsObject():
-			// 如果是对象类型，需要创建新的解析帧并压入栈中，继续深度遍历
+		case subNode.IsObject() || subNode.IsArray():
+			// Object 和 Array，需要创建新的解析帧并压入栈中，继续深度遍历
 			frameStack.Push(&model.ParseFrame{
 				Node:        &subNode,
 				FieldName:   subNodeFieldName,
 				Target:      frame.Result,
 				Result:      lo.TernaryF(subNode.IsArray(), func() any { return ptr.Of(make([]any, 0)) }, func() any { return make(map[string]any) }),
 				SharedMemo:  frame.SharedMemo,
+				Path:        frame.BuildNodePath(subNodeFieldName),
 				SubNodeIter: common.FlattenNode(&subNode).First(),
 				CondContext: &model.ConditionalContext{
 					IsMatched: false,
 				},
 			})
 			continue
-		case subNode.IsArray():
-			// 如果是数组类型，需要反向遍历数组元素
-			// 并且 target指向一个新切片
-			var (
-				arr        = subNode.Array()
-				target any = ptr.Of(make([]any, 0))
-			)
-			if result, ok := frame.Result.(*[]any); ok {
-				*result = append(*result, target)
-			} else {
-				frame.Result.(map[string]any)[subNodeFieldName] = target
-			}
-
-			for i := len(arr) - 1; i >= 0; i-- {
-				frameStack.Push(&model.ParseFrame{
-					Node:        &arr[i],
-					FieldName:   subNodeFieldName,
-					Target:      target,
-					Result:      lo.TernaryF(arr[i].IsArray(), func() any { return ptr.Of(make([]any, 0)) }, func() any { return make(map[string]any) }),
-					SharedMemo:  frame.SharedMemo,
-					SubNodeIter: common.FlattenNode(&arr[i]).First(),
-					CondContext: &model.ConditionalContext{
-						IsMatched: false,
-					},
-				})
-			}
 		default:
-			if frame.IsAssigningVariable() {
-				// 正在进行变量赋值
+			if frame.InVarScope() {
+				// 在 var 作用域
 				p.localVariables[subNodeFieldName] = p.dataset[subNodeFieldName]
-				p.dataset[subNodeFieldName] = p.replaceExpression(ctx, &subNode)
+				p.dataset[subNodeFieldName] = p.transformNodeToValue(ctx, &subNode)
 				slog.InfoContext(ctx, fmt.Sprintf("[parser.assignVariables](trace) create variable,\nkey = %s,\nvalue = %s,\nexpr = %s", subNodeFieldName, util.GenerateStructFormattedString(p.dataset[subNodeFieldName]), subNode.String()))
-			} else if frame.IsExecutingOperation() {
-				// 正在执行操作语句
-				
-
+			} else if frame.InExecScope() {
+				// 在 exec 作用域
+				p.executeOperationsOnNode(ctx, &subNode)
+				slog.InfoContext(ctx, fmt.Sprintf("[parser.execOperations](trace) execute operation,\nkey = %s,\nvalue = %s,\nexpr = %s", subNodeFieldName, util.GenerateStructFormattedString(p.dataset[subNodeFieldName]), subNode.String()))
 			} else if frame.IsConditionalMatched() {
 				// 条件语句匹配成功，使用条件匹配值
-				frame.Result = p.replaceExpression(ctx, frame.CondContext.MatchedValue)
+				frame.Result = p.transformNodeToValue(ctx, frame.CondContext.MatchedValue)
 			} else {
 				// 有字段名，设置结果的对应字段
 				if result, ok := frame.Result.(*[]any); ok {
-					*result = append(*result, p.replaceExpression(ctx, &subNode))
+					*result = append(*result, p.transformNodeToValue(ctx, &subNode))
 				} else {
-					frame.Result.(map[string]any)[subNodeFieldName] = p.replaceExpression(ctx, &subNode)
+					frame.Result.(map[string]any)[subNodeFieldName] = p.transformNodeToValue(ctx, &subNode)
 				}
 			}
 			continue
@@ -275,20 +247,48 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 	return result
 }
 
-// replaceExpression 递归替换 object 中所有含有${Expression}的值
-func (p *Parser) replaceExpression(ctx context.Context, input *model.TNode) any {
-	if input == nil || !input.Exists() {
-		return nil
-	}
-	// JSON 共有 4 种类型: bool, number, null, string
+// transformNodeToValue 将节点转换为值
+func (p *Parser) transformNodeToValue(ctx context.Context, node *model.TNode) any {
 	switch {
-	case input.IsBool(): // bool
-		return input.Bool()
-	case input.Type == gjson.Number: // number
-		return input.Num
-	case input.Type == gjson.Null: // null
+	case node.IsObject(): // object
+		slog.ErrorContext(ctx, "[parser.transformNodeToValue] object type should not be here.", "input", node.String())
+		return nil
+	case node.IsArray(): // array
+		slog.ErrorContext(ctx, "[parser.transformNodeToValue] array type should not be here.", "input", node.String())
+		return nil
+	case node.IsBool(): // bool
+		return node.Bool()
+	case node.Type == gjson.Number: // number
+		return node.Num
+	case node.Type == gjson.Null: // null
 		return nil
 	default: // string
-		return p.exprHandler.EvaluateExpressionsInText(ctx, input.String()) // 使用数据集中的值替换字符串中的变量
+		return p.exprHandler.InterpolateString(ctx, node.String()) // 使用数据集中的值替换字符串中的变量
+	}
+}
+
+// executeOperationsOnNode 执行操作
+// TODO: 增加 error 返回
+func (p *Parser) executeOperationsOnNode(ctx context.Context, node *model.TNode) {
+	switch {
+	case node.IsObject():
+		slog.ErrorContext(ctx, "[parser.executeOperationsOnNode] object type should not be here.", "input", node.String())
+		return
+	case node.IsArray():
+		slog.ErrorContext(ctx, "[parser.executeOperationsOnNode] array type should not be here.", "input", node.String())
+		return
+	case node.IsBool():
+		slog.WarnContext(ctx, "[parser.executeOperationsOnNode] bool type should not be here.", "input", node.String())
+		return
+	case node.Type == gjson.Number:
+		slog.WarnContext(ctx, "[parser.executeOperationsOnNode] number type should not be here.", "input", node.String())
+		return
+	case node.Type == gjson.Null:
+		slog.WarnContext(ctx, "[parser.executeOperationsOnNode] null type should not be here.", "input", node.String())
+		return
+	default:
+		// 执行操作
+		p.exprHandler.ExecuteAllExpressionsInText(ctx, node.String())
+		slog.InfoContext(ctx, fmt.Sprintf("[parser.executeOperationsOnNode](trace) execute operation,\nkey = %s,\nvalue = %s", node.String(), node.String()))
 	}
 }

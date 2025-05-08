@@ -28,7 +28,6 @@ var (
 	// 循环语句的分隔符
 	loopStatementDelimiters = []string{
 		" in ",
-		":=",
 	}
 )
 
@@ -60,7 +59,7 @@ func ExtractAllExpressions(input string) []string {
 
 // ParseLoopStatement 解析循环语句
 func ParseLoopStatement(ctx context.Context, statement string) (*model.LoopMeta, bool) {
-	// statement like "index,val:=list"、"key,val := map"、"_,val in list"、"key,val := map"
+	// statement like "index,val:=list"、"key,val in map"、"_,val in list"
 	statement = strings.TrimSpace(statement)
 
 	var (

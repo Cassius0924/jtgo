@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/cassius0924/jtgo/ds"
@@ -13,11 +14,12 @@ type TNode = gjson.Result
 
 // ParseFrame 模板引擎解析帧
 type ParseFrame struct {
-	Node          *TNode         // 当前帧的节点
-	FieldName     string         // 当前帧的字段名
-	Target        any            // 父帧的解析结果，指向父帧的 Result
-	Result        any            // 本帧的解析结果
-	SharedMemo    map[string]any // 帧与帧之间的共享数据的备忘录，类似一个全局变量
+	Node       *TNode         // 当前帧的节点
+	FieldName  string         // 当前帧的字段名
+	Target     any            // 父帧的解析结果，指向父帧的 Result
+	Result     any            // 本帧的解析结果
+	SharedMemo map[string]any // 帧与帧之间的共享数据的备忘录，类似一个全局变量
+	Path       string         // 当前帧在模板中的路径
 
 	SubNodeIter *vector.VectorIterator[*ds.Pair[TNode, TNode]] // 当前帧的子节点迭代器
 
@@ -30,23 +32,23 @@ func (f *ParseFrame) IsConditionalMatched() bool {
 	return f.CondContext != nil && f.CondContext.IsMatched && !(f.SharedMemo["no_match"] == true)
 }
 
-// HasLoopContext 是否存在循环上下文
-func (f *ParseFrame) HasLoopContext() bool {
-	return f.LoopContext != nil
+// IsLoopDone 是否完成循环
+func (f *ParseFrame) IsLoopDone() bool {
+	return f.LoopContext != nil && f.LoopContext.IsDone
 }
 
 // ShouldTraverseAllSubNodes 是否需要遍历完所有节点
 func (f *ParseFrame) ShouldTraverseAllSubNodes() bool {
-	return f.IsAssigningVariable() || f.IsExecutingOperation()
+	return f.InVarScope() || f.InExecScope()
 }
 
-// IsAssigningVariable 是否正在赋值变量
-func (f *ParseFrame) IsAssigningVariable() bool {
+// InVarScope 是否在变量赋值作用域
+func (f *ParseFrame) InVarScope() bool {
 	return f.SharedMemo["assigning_variable"] == true
 }
 
-// IsExecutingOperation 是否正在执行操作
-func (f *ParseFrame) IsExecutingOperation() bool {
+// InExecScope 是否在操作执行作用域
+func (f *ParseFrame) InExecScope() bool {
 	return f.SharedMemo["executing_operation"] == true
 }
 
@@ -66,6 +68,12 @@ func (f *ParseFrame) ResetMatched() {
 	}
 	f.CondContext.MatchedValue = nil
 	f.CondContext.IsMatched = false
+}
+
+// BuildNodePath 构建节点路径
+func (f *ParseFrame) BuildNodePath(fieldName string) string {
+	// TODO: 性能优化
+	return fmt.Sprintf("%s.%s", f.Path, fieldName)
 }
 
 // ConditionalContext 条件判断上下文
@@ -98,6 +106,7 @@ type LoopContext struct {
 	OwnerFieldName string           // 当前循环所属的字段名
 	Continued      bool             // 是否命中 continue
 	IsSerialFor    bool             // 是否是串行for循环
+	IsDone         bool             // 是否完成循环
 }
 
 func NewLoopContext() *LoopContext {

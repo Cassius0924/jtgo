@@ -25,6 +25,7 @@ func init() {
 	RegisterBuiltInFunction(Dec)
 	RegisterBuiltInFunction(Set)
 	RegisterBuiltInFunction(CompactSlice)
+	RegisterBuiltInFunction(PtrInt)
 
 	// 时间日期函数
 	RegisterBuiltInFunction(Unix)
@@ -46,6 +47,10 @@ func init() {
 	RegisterBuiltInFunction(LogInfo)
 	RegisterBuiltInFunction(LogWarn)
 	RegisterBuiltInFunction(LogError)
+}
+
+func PtrInt(value int) *int {
+	return &value
 }
 
 // LogInfo 用于打印 info 级别日志

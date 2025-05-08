@@ -40,7 +40,6 @@ var (
 	KeywordDelimiters = []rune{
 		' ',
 		'\t',
-		':',
 	}
 )
 
@@ -51,7 +50,7 @@ func DetectKeyword(input string) (Keyword, string) {
 	for _, kw := range KeywordList {
 		if strings.HasPrefix(lower, string(kw)) {
 			statement := input[len(kw):]
-			// 关键词后面必须是空白、冒号、或结束
+			// 关键词后面必须是空白
 			if statement == "" || lo.Contains(KeywordDelimiters, rune(statement[0])) {
 				return kw, strings.TrimSpace(statement)
 			}

@@ -18,7 +18,7 @@ func TestEngine_InputOutput(t *testing.T) {
 	tmpl := readTemplate("input_template.jtgo", t)
 
 	// 3. 创建引擎
-	engine, _ := jtgo.GetJSONTemplateEngine(context.Background(), "TestEngine_InputOutput", tmpl)
+	engine, _ := jtgo.GetEngine(context.Background(), "TestEngine_InputOutput", tmpl)
 
 	// 4. 传入数据集并解析模板，获得JSON内容
 	result, _ := engine.WithDataset(dataset).Run()

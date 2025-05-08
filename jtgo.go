@@ -18,6 +18,6 @@ func init() {
 	slog.SetDefault(logger)
 }
 
-func GetJSONTemplateEngine(ctx context.Context, sceneKey, newConfigJSON string) (*core.JTEngine, error) {
-	return core.GetJSONTemplateEngine(ctx, sceneKey, newConfigJSON)
+func GetEngine(ctx context.Context, templateID, template string) (*core.JTEngine, error) {
+	return core.GetJSONTemplateEngine(ctx, templateID, template)
 }

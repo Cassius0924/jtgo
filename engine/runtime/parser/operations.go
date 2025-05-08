@@ -22,7 +22,7 @@ func (p *Parser) execOperations(ctx context.Context, node *model.TNode, frame *m
 
 // returnResult 处理 return 操作
 func (p *Parser) returnResult(ctx context.Context, node *model.TNode) any {
-	result := p.replaceExpression(ctx, node)
+	result := p.transformNodeToValue(ctx, node)
 	slog.InfoContext(ctx, fmt.Sprintf("[parser.returnResult](trace) return result,\nresult = %s", util.GenerateStructFormattedString(result)))
 	return result
 }
@@ -109,13 +109,18 @@ func (p *Parser) judgeConditionalElse(ctx context.Context, node *model.TNode, fr
 }
 
 // executeLoop 处理for循环
-func (p *Parser) executeLoop(ctx context.Context, node *model.TNode, statement string, frame *model.ParseFrame) {
+func (p *Parser) executeLoop(ctx context.Context, node *model.TNode, statement string, frame *model.ParseFrame) bool {
 	// 如果循环上下文不存在，则是第一次执行循环，进行初始化
+	defer func() {
+		if frame.LoopContext != nil {
+			frame.LoopContext.IsDone = true
+		}
+	}()
 	if frame.LoopContext == nil {
 		err := p.initLoopContext(ctx, statement, frame)
 		if err != nil {
 			p.err = err
-			return
+			return false
 		}
 	}
 
@@ -181,10 +186,11 @@ func (p *Parser) executeLoop(ctx context.Context, node *model.TNode, statement s
 		}
 	default:
 		slog.ErrorContext(ctx, "[parser.executeLoop] loop object is not a supported rangeable type", "statement", statement)
-		return
+		return false
 	}
 
 	frame.Result = result
+	return false
 }
 
 // initLoopContext 初始化循环上下文

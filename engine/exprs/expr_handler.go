@@ -65,8 +65,21 @@ func (h *ExprHandler) EvaluateExpression(ctx context.Context, expression string)
 	return result, nil
 }
 
-// EvaluateExpressionsInText 计算文案中的表达式并且拼接
-func (h *ExprHandler) EvaluateExpressionsInText(ctx context.Context, input string) any {
+// ExecuteAllExpressionsInText 执行文本中的所有表达式
+func (h *ExprHandler) ExecuteAllExpressionsInText(ctx context.Context, text string) error {
+	var (
+		exps = ExtractAllExpressions(text)
+		err  error
+	)
+	for _, exp := range exps {
+		_, err = h.EvaluateExpression(ctx, exp)
+	}
+	return err
+}
+
+// InterpolateString 进行字符串插值
+// TODO: 增加返回 Error
+func (h *ExprHandler) InterpolateString(ctx context.Context, input string) any {
 	text := strings.TrimSpace(input)
 	exps := ExtractAllExpressions(text) // 找到text中所有${variable}中的variable
 	// 除表达式外，还有其他字符的场景，一定是字符串
@@ -77,7 +90,7 @@ func (h *ExprHandler) EvaluateExpressionsInText(ctx context.Context, input strin
 			continue
 		}
 
-		// 如果是只有一个表达式，且无其他字符的场景，直接替换，例如 "assembleGameModuleActivity(PromoteGame)" 计算函数值然后返回一个结构体
+		// 如果是只有一个表达式，且无其他字符的场景，直接替换
 		if len(exps) == 1 && fmt.Sprintf(expressionFormat, exps[0]) == input {
 			return result
 		}
