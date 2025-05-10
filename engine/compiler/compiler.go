@@ -121,26 +121,11 @@ func (c *Compiler) iterativeCompile(ctx context.Context, templateNode *model.TNo
 		}
 
 		switch {
-		case object.IsObject():
+		case object.IsObject(), object.IsArray():
 			// 如果是对象类型，将其压入栈中继续处理
 			frameStack.Push(&CompileFrame{
 				Node:        object,
 				SubNodeIter: common.FlattenNode(object).First(),
-			})
-		case object.IsArray():
-			// 如果是数组类型，遍历数组中的每个元素并压入栈中
-			object.ForEach(func(_, value gjson.Result) bool {
-				if value.IsObject() || value.IsArray() {
-					valueNode := model.NewTNode(value)
-					frameStack.Push(&CompileFrame{
-						Node:        valueNode,
-						SubNodeIter: common.FlattenNode(valueNode).First(),
-					})
-				} else if !value.IsBool() && value.Type != gjson.Number && value.Type != gjson.Null {
-					// 处理字符串类型的值
-					c.exprHandler.CompileStringExpressions(ctx, value.String(), c.compiledExps)
-				}
-				return true
 			})
 		case object.IsBool() || object.Type == gjson.Number || object.Type == gjson.Null:
 			// 基本类型，不需要处理
