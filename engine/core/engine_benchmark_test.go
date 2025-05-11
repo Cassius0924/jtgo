@@ -139,7 +139,7 @@ func BenchmarkEngine_ComplexTemplate(b *testing.B) {
 			"@cmt": "this is a comment",
 			"@cmt": 2,
 			"@cmt": true,
-            "@for idx,user := userList": {
+            "@for idx,user in userList": {
 				"@cmt": "this is a comment",
 				"num": "${idx + 1}",
                 "name": "${user.first_name} ${user.last_name}",
