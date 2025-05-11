@@ -29,20 +29,19 @@ var (
 	templateIDToTemplate     sync.Map // 缓存模板节点
 	templateIDToCompiledExps sync.Map // 缓存编译过的表达式集合
 	templateIDToLoopMeta     sync.Map // 缓存循环元数据集合
+	templateIDToSubNodeIters sync.Map // 缓存子节点迭代器集合
 	templateIDToCustomFuncs  sync.Map // 自定义函数集合
 
 	builtInFns = make(map[string]any) // 引擎内置函数集合
 )
 
 type JTEngine struct {
-	ctx          context.Context
-	templateID   string
-	template     string
-	entry        string
-	dataset      map[string]any
-	target       any
-	compiledExps map[string]*vm.Program     // 缓存编译过的表达式
-	loopMetas    map[string]*model.LoopMeta // 循环语句元数据
+	ctx        context.Context
+	templateID string
+	template   string
+	entry      string
+	dataset    map[string]any
+	target     any
 
 	exprHandler *exprs.ExprHandler // 表达式处理器
 	compiler    *compiler.Compiler // 模板编译器
@@ -77,6 +76,7 @@ func (e *JTEngine) GetDataset() map[string]any {
 	return e.dataset
 }
 
+// clear 清空引擎状态
 func (e *JTEngine) clear() {
 	e.entry = defaultEntry
 	e.dataset = nil
@@ -114,8 +114,9 @@ func GetJSONTemplateEngine(ctx context.Context, templateID, template string) (*J
 
 		var (
 			cachedCompiledExps map[string]*vm.Program
-			cachedCustomFns  map[string]any
+			cachedCustomFns    map[string]any
 			cachedLoopMeta     map[string]*model.LoopMeta
+			cachedSubNodeIters map[string]*model.NodeIter
 		)
 		if compiledExps, ok := templateIDToCompiledExps.LoadOrStore(templateID, make(map[string]*vm.Program)); ok {
 			cachedCompiledExps = compiledExps.(map[string]*vm.Program)
@@ -135,21 +136,26 @@ func GetJSONTemplateEngine(ctx context.Context, templateID, template string) (*J
 			slog.ErrorContext(ctx, "[core.GetJSONTemplateEngine] cached loop meta not found", "templateID", templateID)
 			return nil, werror.ErrCachedLoopMetaNotFound
 		}
+		if subNodeIters, ok := templateIDToSubNodeIters.LoadOrStore(templateID, make(map[string]*model.NodeIter)); ok {
+			cachedSubNodeIters = subNodeIters.(map[string]*model.NodeIter)
+		} else {
+			slog.ErrorContext(ctx, "[core.GetJSONTemplateEngine] cached sub node iterators not found", "templateID", templateID)
+			return nil, werror.ErrCachedSubNodeIteratorsNotFound
+		}
 
+		// 合并内置函数和自定义函数
 		fns := lo.Assign(builtInFns, cachedCustomFns)
 		exprHandler := exprs.NewExprHandler(templateID, template, fns)
 
 		// 使用缓存的编译过的表达式
 		return &JTEngine{
-			ctx:          ctx,
-			templateID:   templateID,
-			entry:        defaultEntry,
-			template:     template,
-			compiledExps: cachedCompiledExps, // 使用原缓存编译过的表达式
-			loopMetas:    cachedLoopMeta,     // 使用原缓存循环元数据
+			ctx:        ctx,
+			templateID: templateID,
+			entry:      defaultEntry,
+			template:   template,
 
 			exprHandler: exprHandler,
-			parser:      parser.NewParser(exprHandler, cachedCompiledExps, cachedLoopMeta),
+			parser:      parser.NewParser(exprHandler, cachedCompiledExps, cachedLoopMeta, cachedSubNodeIters),
 		}, nil
 	}
 
@@ -175,25 +181,28 @@ func createJSONTemplateEngine(ctx context.Context, templateID, template string) 
 		compiler:    compiler.NewCompiler(exprHandler),
 	}
 
-	slog.InfoContext(ctx, "[core.GetJSONTemplateEngine] template is updated, running iterativePreCompile", "templateID", templateID, "template", template, "custom function count", len(customFns.(map[string]any)))
+	slog.InfoContext(ctx, "[core.createJSONTemplateEngine] template is updated, running compile", "templateID", templateID, "template", template, "custom function count", len(customFns.(map[string]any)))
 	err := engine.compiler.Compile(ctx, template)
 	if err != nil {
 		return nil, err
 	}
 
-	// 迭代编译完成后，获取编译过的表达式和循环元数据
-	engine.compiledExps = engine.compiler.GetCompiledExps()
-	engine.loopMetas = engine.compiler.GetLoopMetas()
-	exprHandler.SetCompiledExps(engine.compiledExps)
+	// 迭代编译完成后，获取编译过的表达式、循环元数据、子节点迭代器
+	compiledExps := engine.compiler.GetCompiledExps()
+	loopMetas := engine.compiler.GetLoopMetas()
+	subNodeIters := engine.compiler.GetSubNodeIters()
+
+	exprHandler.SetCompiledExps(compiledExps)
 	// 创建模板解析器
-	engine.parser = parser.NewParser(exprHandler, engine.compiledExps, engine.loopMetas)
+	engine.parser = parser.NewParser(exprHandler, compiledExps, loopMetas, subNodeIters)
 
 	// 缓存
 	templateIDToTemplate.Store(templateID, template)
-	templateIDToCompiledExps.Store(templateID, engine.compiledExps)
-	templateIDToLoopMeta.Store(templateID, engine.loopMetas)
+	templateIDToCompiledExps.Store(templateID, compiledExps)
+	templateIDToLoopMeta.Store(templateID, loopMetas)
+	templateIDToSubNodeIters.Store(templateID, subNodeIters)
 
-	slog.InfoContext(ctx, "[core.GetJSONTemplateEngine] create JSON template engine success", "templateID", templateID)
+	slog.InfoContext(ctx, "[core.createJSONTemplateEngine] create JSON template engine success", "templateID", templateID)
 	return engine, nil
 }
 
@@ -206,7 +215,6 @@ func GetJSONTemplateEngineFromContext(ctx context.Context) *JTEngine {
 func (e *JTEngine) Run() (string, error) {
 	slog.InfoContext(e.ctx, "[core.Run](trace) Run function start")
 	defer func() {
-		// 清空调用链
 		e.clear()
 		slog.InfoContext(e.ctx, "[core.Run](trace) Run function end")
 	}()

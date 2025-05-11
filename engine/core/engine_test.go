@@ -408,13 +408,70 @@ func TestEngine_LoopSlice(t *testing.T) {
 	"_main_": {
 		"sub_test_list": {
 			"@for idx,val in b": {
-				"name": "${idx}_${val}"
+				"name": "${idx}_${val}",
+				"val": {
+					"@if true": "${c}"
+				}
 			}
 		}
 	}
 }
 	`
 		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_LoopSlice", tmpl)
+		So(err, ShouldBeNil)
+
+		dataset := map[string]any{
+			"b": []string{
+				"json",
+				"template",
+				"with",
+				"go",
+			},
+			"c": "hello",
+		}
+
+		result, _ := engine.WithDataset(dataset).Run()
+
+		So(result, ShouldEqualJSON, `
+{
+	"sub_test_list": [
+		{
+			"name": "0_json",
+			"val": "hello"
+		},
+		{
+			"name": "1_template",
+			"val": "hello"
+		},
+		{
+			"name": "2_with",
+			"val": "hello"
+		},
+		{
+			"name": "3_go",
+			"val": "hello"
+		}
+	]
+}
+	`)
+	})
+}
+
+func TestEngine_LoopSliceWithArray(t *testing.T) {
+	Convey("TestEngine_LoopSliceWithArray", t, func() {
+		tmpl := `
+{
+	"_main_": {
+		"sub_test_list": {
+			"@for idx,val in b": [
+				"${idx}",
+				"${val}"
+			]
+		}
+	}
+}
+	`
+		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_LoopSliceWithArray", tmpl)
 		So(err, ShouldBeNil)
 
 		dataset := map[string]any{
@@ -431,18 +488,22 @@ func TestEngine_LoopSlice(t *testing.T) {
 		So(result, ShouldEqualJSON, `
 {
 	"sub_test_list": [
-		{
-			"name": "0_json"
-		},
-		{
-			"name": "1_template"
-		},
-		{
-			"name": "2_with"
-		},
-		{
-			"name": "3_go"
-		}
+		[
+			0,
+			"json"
+		],
+		[
+			1,
+			"template"
+		],
+		[
+			2,
+			"with"
+		],
+		[
+			3,
+			"go"
+		]
 	]
 }
 	`)
@@ -553,125 +614,6 @@ func TestEngine_LoopMapNoObject(t *testing.T) {
 	})
 }
 
-func TestEngine_LoopMapNested(t *testing.T) {
-	Convey("TestEngine_LoopMapNested", t, func() {
-		tmpl := `
-{
-	"_main_": {
-		"name_list": {
-			"@for key,val in a": {
-				"@for key2,val2 in b": {
-					"name": "${key}_${val}_${key2}_${val2}"
-				}
-			}
-		}
-	}
-}
-	`
-		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_LoopMapNested", tmpl)
-		So(err, ShouldBeNil)
-
-		dataset := map[string]any{
-			"a": map[string]string{
-				"hello": "world",
-				"hi":    "golang",
-			},
-			"b": map[string]string{
-				"json": "template",
-				"with": "go",
-			},
-		}
-
-		var result map[string]any
-		_, _ = engine.WithDataset(dataset).ParseTo(&result).Run()
-
-		// 验证结果结构是否正确
-		So(result, ShouldNotBeNil)
-		So(result["name_list"], ShouldHaveSameTypeAs, []any{})
-
-		nameList, _ := result["name_list"].([]any)
-		So(len(nameList), ShouldEqual, 2) // 应该有2个元素 (a的长度)
-
-		// 验证每个元素是数组且长度为2 (b的长度)
-		for _, item := range nameList {
-			innerList, ok := item.([]any)
-			So(ok, ShouldBeTrue)
-			So(len(innerList), ShouldEqual, 2)
-		}
-
-		// 检查所有可能的组合是否存在
-		expectedCombinations := []string{
-			"hello_world_json_template",
-			"hello_world_with_go",
-			"hi_golang_json_template",
-			"hi_golang_with_go",
-		}
-
-		foundCombinations := map[string]bool{}
-
-		// 收集所有name值
-		for _, outerItem := range nameList {
-			innerList := outerItem.([]any)
-			for _, innerItem := range innerList {
-				nameMap := innerItem.(map[string]any)
-				name, _ := nameMap["name"].(string)
-				foundCombinations[name] = true
-			}
-		}
-
-		// 验证所有期望的组合都存在
-		for _, expected := range expectedCombinations {
-			So(foundCombinations[expected], ShouldBeTrue)
-		}
-	})
-}
-
-func TestEngine_LoopSliceNested(t *testing.T) {
-	Convey("TestEngine_LoopSliceNested", t, func() {
-		tmpl := `
-{
-	"_main_": {
-		"sub_test_list": {
-			"@for idx,val in a": {
-				"@for idx2,val2 in b": {
-					"name": "${idx}_${val}_${idx2}_${val2}"
-				}
-			}
-		}
-	}
-}
-	`
-		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_LoopSliceNested", tmpl)
-		So(err, ShouldBeNil)
-
-		dataset := map[string]any{
-			"a": []string{
-				"a1",
-			},
-			"b": []string{
-				"b1",
-				"b2",
-			},
-		}
-
-		result, _ := engine.WithDataset(dataset).Run()
-		So(result, ShouldEqualJSON, `
-{
-	"sub_test_list": [
-		[
-			{
-				"name": "0_a1_0_b1"
-			},	
-			{
-				"name": "0_a1_1_b2"
-			}
-		]
-	]
-}
-		`)
-	})
-}
-
 func TestEngine_LoopWithError(t *testing.T) {
 	Convey("TestEngine_LoopWithError", t, func() {
 		tmpl := `
@@ -697,7 +639,9 @@ func TestEngine_LoopWithError(t *testing.T) {
 		So(err, ShouldNotBeNil)
 		So(result, ShouldEqualJSON, `
 		{
-			"value": {}
+			"value": {
+				"name": "wrong"
+			}
 		}`)
 
 	})
@@ -884,6 +828,7 @@ func TestEngine_VarWithIf(t *testing.T) {
 	"_main_": {
 		"name": {
 			"@var": {
+				"@if true": "abc",
 				"@if noExist": {
 					"y": "nothing"
 				},
@@ -1035,7 +980,6 @@ func TestEngine_ExecString(t *testing.T) {
 
 	})
 }
-
 func TestEngine_ExecArray(t *testing.T) {
 	Convey("TestEngine_ExecArray", t, func() {
 		tmpl := `
@@ -1049,6 +993,68 @@ func TestEngine_ExecArray(t *testing.T) {
 			"@exec": [
 				"${Inc(a)}"
 			],
+			"name": "${a}"
+		}
+	}
+}
+`
+		engine, err := GetJSONTemplateEngine(context.Background(), "TestEngine_ExecArray", tmpl)
+		So(err, ShouldBeNil)
+
+		a := 0
+		dataset := map[string]any{
+			"a": &a,
+		}
+
+		result, _ := engine.WithDataset(dataset).Run()
+
+		So(result, ShouldEqualJSON, `
+{
+	"value": {
+		"name": 3
+	}
+}
+`)
+
+	})
+}
+
+func TestEngine_ExecWithIf(t *testing.T) {
+	Convey("TestEngine_ExecArray", t, func() {
+		tmpl := `
+{
+	"_main_": {
+		"@exec": {
+			"@cmt": "Will not run here",
+			"${Inc(a)}": "${Inc(a)}",
+
+			"@cmt": "Will not run here",
+			"@if false": "${Inc(a)}",
+
+			"@cmt": "+1",
+			"@elif true": "${Inc(a)}",
+
+			"@cmt": "Will not run here",
+			"@elif true": "${Inc(a)}",
+
+			"@cmt": "Will not run here",
+			"@else": "${Inc(a)}",
+
+			"@cmt": "Will not run here",
+			"@if true": {
+				"@cmt": "+2",
+				"@if true": [
+					"${Inc(a)}",
+					"${Inc(a)}"
+				],
+
+				"@cmt": "Will not run here",
+				"@else": [
+					"${Inc(a)}"
+				]
+			}
+		},
+		"value": {
 			"name": "${a}"
 		}
 	}

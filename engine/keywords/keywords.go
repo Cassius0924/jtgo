@@ -10,7 +10,6 @@ type Keyword string
 
 const (
 	// 关键词，全小写
-	KeywordDefault  Keyword = "@default"
 	KeywordExec     Keyword = "@exec"
 	KeywordReturn   Keyword = "@return"
 	KeywordVar      Keyword = "@var"
@@ -18,14 +17,12 @@ const (
 	KeywordIf       Keyword = "@if"
 	KeywordElif     Keyword = "@elif"
 	KeywordElse     Keyword = "@else"
-	KeywordContinue Keyword = "@continue"
 	KeywordCmt      Keyword = "@cmt"
 )
 
 var (
 	// Keywords 关键词列表
 	KeywordList = []Keyword{
-		KeywordDefault,
 		KeywordExec,
 		KeywordReturn,
 		KeywordVar,
@@ -33,7 +30,6 @@ var (
 		KeywordIf,
 		KeywordElif,
 		KeywordElse,
-		KeywordContinue,
 		KeywordCmt,
 	}
 
@@ -81,10 +77,6 @@ func IsVarKeyword(input string) bool {
 	return IsKeyword(input, KeywordVar)
 }
 
-func IsDefaultKeyword(input string) bool {
-	return IsKeyword(input, KeywordDefault)
-}
-
 func IsForStatement(input string) bool {
 	return IsKeyword(input, KeywordFor)
 }
@@ -99,10 +91,6 @@ func IsElifStatement(input string) bool {
 
 func IsElseKeyword(input string) bool {
 	return IsKeyword(input, KeywordElse)
-}
-
-func IsContinueKeyword(input string) bool {
-	return IsKeyword(input, KeywordContinue)
 }
 
 func IsCmtKeyword(input string) bool {

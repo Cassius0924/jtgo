@@ -9,6 +9,7 @@ import (
 	"github.com/cassius0924/jtgo/ds"
 	"github.com/cassius0924/jtgo/engine/common"
 	"github.com/cassius0924/jtgo/engine/exprs"
+	"github.com/cassius0924/jtgo/engine/flags"
 	"github.com/cassius0924/jtgo/engine/keywords"
 	"github.com/cassius0924/jtgo/engine/model"
 	"github.com/cassius0924/jtgo/util"
@@ -19,9 +20,11 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+// Parser 模板解析器
 type Parser struct {
 	exprHandler    *exprs.ExprHandler         // 表达式处理器
 	loopMetas      map[string]*model.LoopMeta // 循环语句元数据
+	subNodeIters   map[string]*model.NodeIter // 子节点迭代器
 	dataset        map[string]any             // 数据集
 	localVariables map[string]any             // 局部变量名称和值
 
@@ -29,10 +32,11 @@ type Parser struct {
 }
 
 // NewParser 创建一个新的解析器实例
-func NewParser(exprHandler *exprs.ExprHandler, compiledExps map[string]*vm.Program, loopMetas map[string]*model.LoopMeta) *Parser {
+func NewParser(exprHandler *exprs.ExprHandler, compiledExps map[string]*vm.Program, loopMetas map[string]*model.LoopMeta, subNodeIters map[string]*model.NodeIter) *Parser {
 	return &Parser{
 		exprHandler:    exprHandler,
 		loopMetas:      loopMetas,
+		subNodeIters:   subNodeIters,
 		localVariables: make(map[string]any),
 	}
 }
@@ -52,7 +56,7 @@ func (p *Parser) Parse(ctx context.Context, template, entry string, target any) 
 	}
 
 	// 循环解析方法
-	result := p.iterativeParse(ctx, model.NewTNode(entryTemplateNode), entry)
+	result := p.iterativeParse(ctx, model.NewTNode(entryTemplateNode, nil), entry)
 	resultStr := util.SonicToString(result)
 
 	if target != nil {
@@ -97,28 +101,39 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 	// |----------------------------------------------> Stack Top
 	//
 	// 初始化栈，将根节点压入栈中
-	frameStack.Push(&model.ParseFrame{
-		Node:        templateNode,
-		FieldName:   templateFieldName,
-		Target:      result,
-		Result:      result,
-		SharedMemo:  make(map[string]any, 2),
-		Path:        templateFieldName,
-		SubNodeIter: common.FlattenNode(templateNode).First(), // 子节点迭代器
-	})
+	templateFieldName = common.NormalizeFieldName(templateFieldName) // 规范化字段名
+	if subNodeIter, ok := p.subNodeIters[templateFieldName]; ok {
+		// 重置迭代器，以确保从头开始遍历子节点
+		frameStack.Push(&model.ParseFrame{
+			Node:        templateNode,
+			FieldName:   templateFieldName,
+			Target:      result,
+			Result:      result,
+			SharedMemo:  make(map[string]any, 2),
+			Path:        templateFieldName,
+			SubNodeIter: subNodeIter.IteratorAt(0).(*model.NodeIter),
+		})
+	} else {
+		slog.ErrorContext(ctx, "[parser.iterativeParse] subNodeIter not found", "path", templateFieldName)
+		return nil
+	}
 
 	// 迭代解析，直到栈为空
 	for frameStack.Size() > 0 {
-		var (
-			frame                 = frameStack.Top() // 获取栈顶帧
-			subNodeField, subNode *model.TNode       // 子节点字段名和子节点
-		)
+		frame := frameStack.Top() // 获取栈顶帧
+
+		// 循环一遍结束，需要继续下一遍循环
+		if frame.Node.NodeFlag.Has(flags.NodeFlagLooping) && !frame.SubNodeIter.IsValid() {
+			// 重置迭代器，并且将索引加1
+			frame.SubNodeIter = frame.SubNodeIter.IteratorAt(0).(*model.NodeIter)
+			frame.Node.LoopContext.DealNextItem()
+		}
 
 		// 以下三种情况需要弹出当前帧:
-		// 1. 子节点迭代器无效（已遍历完所有子节点）
-		// 2. 在不需要遍历完所有字节点的情况下，匹配到条件语句（再需要遍历完所有节点的情况，即使匹配到条件语句，也需要继续解析，直至所有子节点解析完毕）
-		// 3. 存在循环上下文（表示循环已处理完毕）
-		if !frame.SubNodeIter.IsValid() || (!frame.ShouldTraverseAllSubNodes() && frame.IsConditionalMatched()) || frame.IsLoopDone() {
+		// 1. 在非处理循环时，子节点迭代器无效（已遍历完所有子节点）
+		// 2. 在不需要遍历完所有子节点的情况下，匹配到条件语句（再需要遍历完所有节点的情况，即使匹配到条件语句，也需要继续解析，直至所有子节点解析完毕）
+		// 3. 循环已遍历完毕（处理循环时）
+		if (!frame.Node.NodeFlag.Has(flags.NodeFlagLooping) && !frame.SubNodeIter.IsValid()) || (frame.InNormalScope() && frame.IsConditionalMatched()) || frame.IsLoopDone() {
 			frameStack.Pop()
 			frame.SharedMemo["no_match"] = false
 			// 离开 var 作用域，需要清空 变量赋值中 的标记
@@ -131,26 +146,27 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 				frame.SharedMemo["executing_operation"] = false
 				continue
 			}
-			if frame.ShouldTraverseAllSubNodes() {
+			// 循环完成，将循环结果放入 Result
+			if frame.IsLoopDone() {
+				frame.Result = frame.Node.LoopContext.ResultList
+			}
+
+			if !frame.InNormalScope() {
 				continue
 			}
 
 			// 如果栈为空，说明所有帧都已经遍历完毕，处理最终结果并返回
 			if frameStack.Size() == 0 {
-				// 如果当前字段名为空或者是循环结果，则直接返回Result
-				if frame.LoopContext != nil && frame.LoopContext.IsSerialFor {
-					result = frame.Result
-				}
 				break
 			}
 
-			// 将当前帧的结果传递给父帧
-			if keywords.IsAnyKeyword(frame.FieldName) {
+			// 如果父帧字段名是关键词，则需要将当前帧的结果传递给父帧，而不能直接复制给 Target
+			if frame.Node.IsAnyKeyword() {
 				// 对于关键字字段，确保辅助结果中存储了当前结果
 				if resultMap, ok := frame.Result.(map[string]any); ok && len(resultMap) == 0 {
 					//  如果当前结果为空，则说明父条件语句不成立，通过 no_match 标记
 					frame.SharedMemo["no_match"] = true
-				} else if _, ok := frame.SharedMemo["assist_result"]; !ok {
+				} else {
 					frame.SharedMemo["assist_result"] = frame.Result
 				}
 			} else {
@@ -163,31 +179,38 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 				} else {
 					resultValue = frame.Result
 				}
+
 				// 将结果设置到父帧的目标中
-				frame.PutTarget(resultValue)
+				// TODO: Target 可以删去，使用Parent的Result代替
+				if parentNode := frame.Node.Parent; parentNode != nil && parentNode.NodeFlag.Has(flags.NodeFlagLooping) {
+					result := parentNode.LoopContext.ResultList[parentNode.LoopContext.Index]
+					util.AppendOrSet(result, frame.FieldName, resultValue)
+				} else {
+					frame.PutTarget(resultValue)
+				}
+
 			}
 			continue
 		}
 		frame.SharedMemo["no_match"] = false
 
 		// 取出当前子节点，并将迭代器指向下一个元素
-		subNodeField, subNode = frame.ExtractSubNodePair()
+		subNodeField, subNode := frame.ExtractSubNodePair()
 		frame.SubNodeIter.Next()
 		subNodeFieldName := common.NormalizeFieldName(subNodeField.String())
 
 		// 处理模板语法关键字
-		keyword, statement := keywords.DetectKeyword(subNodeFieldName)
-		if keyword != "" {
+		if subNode.IsAnyKeyword() {
 			// 获取关键字处理器并执行处理
-			processor := GetProcessor(keyword)
+			processor := GetProcessor(subNode.Keyword)
 			if processor == nil {
-				slog.ErrorContext(ctx, "[parser.iterativeParse] keyword processor not found", "keyword", keyword)
+				slog.ErrorContext(ctx, "[parser.iterativeParse] keyword processor not found", "keyword", subNode.Keyword)
 				p.err = werror.ErrProcessorNotRegistered
 				return nil
 			}
 
 			// 如果处理器返回false，表示不需要继续处理当前节点
-			processCurrentNode := processor.Process(ctx, subNode, statement, frame, p)
+			processCurrentNode := processor.Process(ctx, subNode, subNode.Statement, frame, p)
 			if !processCurrentNode {
 				continue
 			}
@@ -197,30 +220,56 @@ func (p *Parser) iterativeParse(ctx context.Context, templateNode *model.TNode, 
 		switch {
 		case subNode.IsObject() || subNode.IsArray():
 			// Object 和 Array，需要创建新的解析帧并压入栈中，继续深度遍历
-			frameStack.Push(&model.ParseFrame{
-				Node:        subNode,
-				FieldName:   subNodeFieldName,
-				Target:      frame.Result,
-				Result:      lo.TernaryF(subNode.IsArray(), func() any { return ptr.Of(make([]any, 0)) }, func() any { return make(map[string]any) }),
-				SharedMemo:  frame.SharedMemo,
-				Path:        frame.BuildNodePath(subNodeFieldName),
-				SubNodeIter: common.FlattenNode(subNode).First(),
-			})
+			// TODO: 移动到编译期
+			path := frame.BuildNodePath(subNodeFieldName)
+			if subNodeIter, ok := p.subNodeIters[path]; ok {
+				frameStack.Push(&model.ParseFrame{
+					Node:        subNode,
+					FieldName:   subNodeFieldName,
+					Target:      frame.Result,
+					Result:      lo.TernaryF(subNode.IsArray(), func() any { return ptr.Of(make([]any, 0)) }, func() any { return make(map[string]any) }),
+					SharedMemo:  frame.SharedMemo,
+					Path:        path,
+					SubNodeIter: subNodeIter.IteratorAt(0).(*model.NodeIter),
+				})
+			} else {
+				slog.ErrorContext(ctx, "[parser.iterativeParse] subNodeIter not found", "path", path)
+				return nil
+			}
 			continue
 		default:
-			if frame.InVarScope() {
+			if frame.InExecScope() || subNode.NodeFlag.Has(flags.NodeFlagExecOnce) {
+				if subNode.NodeFlag.HasAny(flags.NodeFlagGeneralObjectItem, flags.NodeFlagKeywordCmt, flags.NodeFlagKeywordReturn, flags.NodeFlagKeywordFor, flags.NodeFlagKeywordVar) {
+					continue
+				}
+				// 在 exec 作用域
+				p.executeOperationsOnNode(ctx, subNode)
+				slog.InfoContext(ctx, fmt.Sprintf("[parser.iterativeParse](trace) execute operation,\nkey = %s,\nvalue = %s,\nexpr = %s", subNodeFieldName, util.GenerateStructFormattedString(p.dataset[subNodeFieldName]), subNode.String()))
+			} else if subNode.CondContext != nil && subNode.IsConditionalMatched() {
+				if !frame.InNormalScope() {
+					continue
+				}
+				// 条件语句匹配成功，使用条件匹配值
+				frame.Result = p.transformNodeToValue(ctx, subNode.CondContext.MatchedValue)
+				slog.InfoContext(ctx, fmt.Sprintf("[parser.iterativeParse](trace) condition matched,\nkey = %s,\nvalue = %s", subNodeFieldName, util.GenerateStructFormattedString(frame.Result)))
+			} else if frame.InVarScope() {
 				// 在 var 作用域
 				p.localVariables[subNodeFieldName] = p.dataset[subNodeFieldName]
 				p.dataset[subNodeFieldName] = p.transformNodeToValue(ctx, subNode)
 				slog.InfoContext(ctx, fmt.Sprintf("[parser.iterativeParse](trace) assign variable,\nkey = %s,\nvalue = %s,\nexpr = %s", subNodeFieldName, util.GenerateStructFormattedString(p.dataset[subNodeFieldName]), subNode.String()))
-			} else if frame.InExecScope() || subNode.NodeFlag.Has(model.NodeFlagExecOnce) {
-				// 在 exec 作用域
-				p.executeOperationsOnNode(ctx, subNode)
-				slog.InfoContext(ctx, fmt.Sprintf("[parser.iterativeParse](trace) execute operation,\nkey = %s,\nvalue = %s,\nexpr = %s", subNodeFieldName, util.GenerateStructFormattedString(p.dataset[subNodeFieldName]), subNode.String()))
-			} else if frame.IsConditionalMatched() {
-				// 条件语句匹配成功，使用条件匹配值
-				frame.Result = p.transformNodeToValue(ctx, frame.CondContext.MatchedValue)
-				slog.InfoContext(ctx, fmt.Sprintf("[parser.iterativeParse](trace) condition matched,\nkey = %s,\nvalue = %s", subNodeFieldName, util.GenerateStructFormattedString(frame.Result)))
+			} else if subNode.NodeFlag.Has(flags.NodeFlagLooping) && subNode.NodeFlag.Has(flags.NodeFlagNodeNonObjectOrArray) {
+				// 在循环中，循环体为非对象或数组类型
+				for !subNode.LoopContext.IsDone() {
+					subNode.LoopContext.ResultList = append(subNode.LoopContext.ResultList, p.transformNodeToValue(ctx, subNode))
+					subNode.LoopContext.DealNextItem()
+				}
+				frame.Result = subNode.LoopContext.ResultList
+				slog.InfoContext(ctx, fmt.Sprintf("[parser.iterativeParse](trace) loop result,\nkey = %s,\nvalue = %s", subNodeFieldName, util.GenerateStructFormattedString(subNode.LoopContext.ResultList)))
+			} else if frame.Node.NodeFlag.Has(flags.NodeFlagLooping) {
+				// 在循环中
+				result := frame.Node.LoopContext.ResultList[frame.Node.LoopContext.Index]
+				util.AppendOrSet(result, subNodeFieldName, p.transformNodeToValue(ctx, subNode))
+				slog.InfoContext(ctx, fmt.Sprintf("[parser.iterativeParse](trace) loop result,\nkey = %s,\nvalue = %s", subNodeFieldName, util.GenerateStructFormattedString(result)))
 			} else {
 				// 有字段名，设置结果的对应字段
 				frame.PutResult(subNodeFieldName, p.transformNodeToValue(ctx, subNode))

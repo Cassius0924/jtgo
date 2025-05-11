@@ -15,3 +15,12 @@ func init() {
 func GenerateStructFormattedString(raw any) string {
 	return fmt.Sprint(spew.Sdump(raw))
 }
+
+// AppendOrSet 根据容器类型追加或设置值
+func AppendOrSet(container any, key string, value any) {
+	if result, ok := container.(*[]any); ok {
+		*result = append(*result, value)
+	} else {
+		container.(map[string]any)[key] = value
+	}
+}

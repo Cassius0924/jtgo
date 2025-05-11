@@ -16,11 +16,10 @@ func NormalizeFieldName(fieldName string) string {
 }
 
 // FlattenNode 将模板节点的所有子节点扁平化为一个动态数组
-// TODO: 只在编译器进行，运行时使用缓存
 func FlattenNode(node *model.TNode) *vector.Vector[*ds.Pair[*model.TNode, *model.TNode]] {
 	var subNodes = ds.NewVectorWithCap[*ds.Pair[*model.TNode, *model.TNode]](len(node.Map()))
 	node.ForEach(func(key, val gjson.Result) bool {
-		subNodes.PushBack(ds.MakePair(model.NewTNode(key), model.NewTNode(val)))
+		subNodes.PushBack(ds.MakePair(model.NewTNode(key, node), model.NewTNode(val, node)))
 		return true
 	})
 	return subNodes

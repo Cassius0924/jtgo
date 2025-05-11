@@ -39,7 +39,6 @@ func initProcessorRegistry() {
 
 		// 注册循环处理器
 		registerProcessor(keywords.KeywordFor, &ForProcessor{})
-		registerProcessor(keywords.KeywordContinue, &ContinueProcessor{})
 
 		// 注册变量处理器
 		registerProcessor(keywords.KeywordVar, &VarProcessor{})

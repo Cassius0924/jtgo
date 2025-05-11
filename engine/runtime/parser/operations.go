@@ -6,11 +6,12 @@ import (
 	"log/slog"
 	"reflect"
 
-	"github.com/cassius0924/jtgo/engine/keywords"
+	"github.com/cassius0924/jtgo/engine/flags"
 	"github.com/cassius0924/jtgo/engine/model"
 	"github.com/cassius0924/jtgo/util"
 	"github.com/cassius0924/jtgo/util/ptr"
 	"github.com/cassius0924/jtgo/werror"
+	"github.com/samber/lo"
 	"github.com/tidwall/gjson"
 )
 
@@ -26,7 +27,7 @@ func (p *Parser) executeOperations(ctx context.Context, node *model.TNode, frame
 		processCurrentNode = true
 	} else if node.Type == gjson.String {
 		// 对于字符串，由于不会创建新解析帧，所以这里使用 NodeFlag 来标记
-		node.NodeFlag.Set(model.NodeFlagExecOnce)
+		node.NodeFlag.Set(flags.NodeFlagExecOnce)
 		slog.InfoContext(ctx, fmt.Sprintf("[parser.executeOperations](trace) set the exec once node flag,\nkey = %s,\nvalue = %s", frame.FieldName, node.String()))
 		processCurrentNode = true
 	}
@@ -57,7 +58,13 @@ func (p *Parser) assignVariables(ctx context.Context, node *model.TNode, frame *
 
 // judgeConditionalIf 处理if条件判断，返回是否命中该条件
 func (p *Parser) judgeConditionalIf(ctx context.Context, node *model.TNode, expression string, frame *model.ParseFrame) bool {
-	frame.CondContext = model.NewConditionalContext()
+	frame.LazyInitCondContextList()
+
+	// 只在处理 if 时创建新的条件上下文
+	node.CondContext = model.NewConditionalContext()
+
+	// 将条件上下文添加到帧维度的链表中，以便 elif 和 else 语句可以访问
+	frame.CondContextList.PushBack(node.CondContext)
 
 	// 表达式计算为bool值
 	matched, err := p.exprHandler.EvaluateExpressionToBool(ctx, expression)
@@ -65,10 +72,9 @@ func (p *Parser) judgeConditionalIf(ctx context.Context, node *model.TNode, expr
 		p.err = err
 	}
 
-	// 表达式为true，替换值，并剪枝结束循环
 	if matched {
-		frame.CondContext.MatchedValue = node
-		frame.CondContext.IsMatched = true
+		node.CondContext.MatchedValue = node
+		node.CondContext.IsMatched = true
 	}
 
 	slog.InfoContext(ctx, fmt.Sprintf("[parser.judgeConditionalIf](trace) condition evaluate result,\nkey = %s,\nvalue = %s,\nexpr = %s", frame.FieldName, node.String(), expression))
@@ -77,14 +83,23 @@ func (p *Parser) judgeConditionalIf(ctx context.Context, node *model.TNode, expr
 
 // judgeConditionalElif 处理elif条件判断，返回是否命中该条件
 func (p *Parser) judgeConditionalElif(ctx context.Context, node *model.TNode, expression string, frame *model.ParseFrame) bool {
-	if frame.CondContext == nil {
-		// 是孤儿 elif 则视为 false
-		slog.WarnContext(ctx, "[parser.judgeConditionalElif] this elif is orphan, please check if the elif belongs to an if!", "key", frame.FieldName)
+	// elif 寻找 if 所创建的条件上下文
+	if frame.CondContextList == nil {
+		slog.ErrorContext(ctx, "[parser.judgeConditionalElif] this elif is orphan, please check if the elif belongs to an if!", "key", frame.FieldName)
 		return false
 	}
 
+	condContext := frame.CondContextList.Back()
+	if condContext == nil || condContext.HasElseBranch {
+		slog.ErrorContext(ctx, "[parser.judgeConditionalElif] this elif is orphan, please check if the elif belongs to an if!", "key", frame.FieldName)
+		return false
+	}
+	condContext.HasElifBranch = true
+	// 将条件上下文绑定到当前节点
+	node.CondContext = condContext
+
 	// 如果当前条件分支已经命中，则不需要再执行 elif 语句
-	if frame.CondContext.IsMatched {
+	if condContext.IsMatched {
 		return false
 	}
 
@@ -94,8 +109,8 @@ func (p *Parser) judgeConditionalElif(ctx context.Context, node *model.TNode, ex
 	}
 
 	if matched {
-		frame.CondContext.MatchedValue = node
-		frame.CondContext.IsMatched = true
+		condContext.MatchedValue = node
+		condContext.IsMatched = true
 	}
 
 	slog.InfoContext(ctx, fmt.Sprintf("[parser.judgeConditionalIf](trace) condition evaluate result,\nkey = %s,\nvalue = %s,\nexpr = %s", frame.FieldName, node.String(), expression))
@@ -104,20 +119,27 @@ func (p *Parser) judgeConditionalElif(ctx context.Context, node *model.TNode, ex
 
 // judgeConditionalElse 处理else条件判断
 func (p *Parser) judgeConditionalElse(ctx context.Context, node *model.TNode, frame *model.ParseFrame) bool {
-	// 判断当前 else 是否是孤儿else，即当前 else 是否属于某一个 if
-	if frame.CondContext == nil {
-		// 是孤儿 else 则视为 false
-		slog.WarnContext(ctx, "[parser.judgeConditionalElse] this else is orphan, please check if the else belongs to an if!", "key", frame.FieldName)
+	// else 寻找 if 所创建的条件上下文
+	if frame.CondContextList == nil {
+		slog.ErrorContext(ctx, "[parser.judgeConditionalElse] this else is orphan, please check if the else belongs to an if!", "key", frame.FieldName)
 		return false
 	}
+
+	condContext := frame.CondContextList.Back()
+	if condContext == nil || condContext.HasElseBranch {
+		slog.ErrorContext(ctx, "[parser.judgeConditionalElif] this elif is orphan, please check if the elif belongs to an if!", "key", frame.FieldName)
+		return false
+	}
+	condContext.HasElseBranch = true
+	node.CondContext = condContext
 
 	// 如果当前条件分支已经命中，则不需要再执行 else 语句
-	if frame.CondContext.IsMatched {
+	if node.CondContext.IsMatched {
 		return false
 	}
 
-	frame.CondContext.MatchedValue = node
-	frame.CondContext.IsMatched = true
+	condContext.MatchedValue = node
+	condContext.IsMatched = true
 
 	slog.InfoContext(ctx, fmt.Sprintf("[parser.judgeConditionalElse](trace) condition evaluate result,\nkey = %s,\nvalue = %s", frame.FieldName, node.String()))
 	return true
@@ -126,91 +148,19 @@ func (p *Parser) judgeConditionalElse(ctx context.Context, node *model.TNode, fr
 // executeLoop 处理for循环
 func (p *Parser) executeLoop(ctx context.Context, node *model.TNode, statement string, frame *model.ParseFrame) bool {
 	// 如果循环上下文不存在，则是第一次执行循环，进行初始化
-	defer func() {
-		if frame.LoopContext != nil {
-			frame.LoopContext.IsDone = true
-		}
-	}()
-	if frame.LoopContext == nil {
-		err := p.initLoopContext(ctx, statement, frame)
-		if err != nil {
-			p.err = err
-			return false
-		}
-	}
+	node.NodeFlag.Set(flags.NodeFlagLooping)
 
-	var (
-		loopCtx  = frame.LoopContext
-		loopMeta = loopCtx.Meta
-		result   []any
-	)
-	switch loopCtx.Type {
-	case model.LoopTypeForWithArray, model.LoopTypeForWithSlice:
-		for ; loopCtx.Index < loopCtx.Length; loopCtx.Index++ {
-			item := loopCtx.ObjectRefl.Index(loopCtx.Index).Interface()
-
-			var (
-				originKey, originValue any
-			)
-			if loopMeta.Key != "" {
-				originKey = p.dataset[loopMeta.Key]
-				p.dataset[loopMeta.Key] = loopCtx.Index
-			}
-
-			if loopMeta.Value != "" {
-				originValue = p.dataset[loopMeta.Value]
-				p.dataset[loopMeta.Value] = item
-			}
-
-			result = append(result, p.iterativeParse(ctx, node, string(keywords.KeywordFor)))
-
-			// 处理完当前循环，恢复局部变量
-			if loopMeta.Key != "" {
-				p.dataset[loopMeta.Key] = originKey
-			}
-			if loopMeta.Value != "" {
-				p.dataset[loopMeta.Value] = originValue
-			}
-		}
-	case model.LoopTypeForWithMap:
-		for loopCtx.MapIter.Next() {
-			key := loopCtx.MapIter.Key().Interface()
-			value := loopCtx.MapIter.Value().Interface()
-
-			var (
-				originKey, originValue any
-			)
-			if loopMeta.Key != "" {
-				originKey = p.dataset[loopMeta.Key]
-				p.dataset[loopMeta.Key] = key
-			}
-			if loopMeta.Value != "" {
-				originValue = p.dataset[loopMeta.Value]
-				p.dataset[loopMeta.Value] = value
-			}
-
-			result = append(result, p.iterativeParse(ctx, node, string(keywords.KeywordFor)))
-
-			// 处理完当前循环，恢复局部变量
-			if loopMeta.Key != "" {
-				p.dataset[loopMeta.Key] = originKey
-			}
-			if loopMeta.Value != "" {
-				p.dataset[loopMeta.Value] = originValue
-			}
-		}
-	default:
-		slog.ErrorContext(ctx, "[parser.executeLoop] loop object is not a supported rangeable type", "statement", statement)
+	err := p.initLoopContext(ctx, node, statement)
+	if err != nil {
+		p.err = err
 		return false
 	}
-
-	frame.Result = result
-	return false
+	return true
 }
 
 // initLoopContext 初始化循环上下文
-func (p *Parser) initLoopContext(ctx context.Context, statement string, frame *model.ParseFrame) error {
-	frame.LoopContext = model.NewLoopContext()
+func (p *Parser) initLoopContext(ctx context.Context, node *model.TNode, statement string) error {
+	node.LoopContext = model.NewLoopContext()
 	// 取出编译期解析的循环元数据
 	loopMeta, ok := p.loopMetas[statement]
 	if !ok {
@@ -226,34 +176,74 @@ func (p *Parser) initLoopContext(ctx context.Context, statement string, frame *m
 	}
 
 	var (
-		objectRefl = reflect.ValueOf(object)
-		loopType   model.LoopType
-		mapIter    *reflect.MapIter
-		length     int
+		objectRefl   = reflect.ValueOf(object)
+		loopType     model.LoopType
+		length       int
+		dealNextItem func()
+		resultList   []any
 	)
 
+	originKey := p.dataset[loopMeta.Key]
+	originValue := p.dataset[loopMeta.Value]
+
 	switch objectRefl.Kind() {
-	case reflect.Slice:
-		loopType = model.LoopTypeForWithSlice
+	case reflect.Slice, reflect.Array:
+		loopType = lo.Ternary(objectRefl.Kind() == reflect.Array, model.LoopTypeForWithArray, model.LoopTypeForWithSlice)
 		length = objectRefl.Len()
-	case reflect.Array:
-		loopType = model.LoopTypeForWithArray
-		length = objectRefl.Len()
+
+		dealNextItem = func() {
+			node.LoopContext.Index++
+			if !node.LoopContext.IsDone() {
+				if loopMeta.Key != "" {
+					p.dataset[loopMeta.Key] = node.LoopContext.Index
+				}
+				if loopMeta.Value != "" {
+					p.dataset[loopMeta.Value] = objectRefl.Index(node.LoopContext.Index).Interface()
+				}
+			}
+		}
+
 	case reflect.Map:
 		loopType = model.LoopTypeForWithMap
-		mapIter = objectRefl.MapRange()
+		mapIter := objectRefl.MapRange()
+		length = objectRefl.Len()
+
+		dealNextItem = func() {
+			node.LoopContext.Index++
+			if mapIter.Next() {
+				if loopMeta.Key != "" {
+					p.dataset[loopMeta.Key] = mapIter.Key().Interface()
+				}
+				if loopMeta.Value != "" {
+					p.dataset[loopMeta.Value] = mapIter.Value().Interface()
+				}
+			}
+		}
+
 	default:
 		slog.ErrorContext(ctx, "[parser.initLoopContext] the loop object is not rangeable", "object", object)
 		return werror.ErrLoopObjectNotRangeable
 	}
 
-	frame.LoopContext.Meta = loopMeta
-	frame.LoopContext.Object = object
-	frame.LoopContext.ObjectRefl = ptr.Of(objectRefl)
-	frame.LoopContext.Type = loopType
-	frame.LoopContext.MapIter = mapIter
-	frame.LoopContext.Length = length
-	frame.LoopContext.IsSerialFor = keywords.IsForStatement(frame.FieldName)
+	resultList = make([]any, 0, length)
+	if node.IsArray() {
+		for i := 0; i < length; i++ {
+			resultList = append(resultList, ptr.Of(make([]any, 0)))
+		}
+	} else if node.IsObject() {
+		for i := 0; i < length; i++ {
+			resultList = append(resultList, make(map[string]any))
+		}
+	}
+
+	node.LoopContext.Type = loopType
+	node.LoopContext.Length = length
+	node.LoopContext.OriginKey = originKey
+	node.LoopContext.OriginValue = originValue
+	node.LoopContext.DealNextItem = dealNextItem
+	node.LoopContext.ResultList = resultList
+	node.LoopContext.Index = -1
+	dealNextItem()
 	return nil
 }
 

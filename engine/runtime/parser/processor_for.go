@@ -15,15 +15,3 @@ type ForProcessor struct {
 func (p *ForProcessor) Process(ctx context.Context, node *model.TNode, statement string, frame *model.ParseFrame, parser *Parser) bool {
 	return parser.executeLoop(ctx, node, statement, frame)
 }
-
-// ContinueProcessor 处理 @continue 关键字
-type ContinueProcessor struct {
-	BaseProcessor
-}
-
-// Process 实现 continue 处理逻辑
-func (p *ContinueProcessor) Process(ctx context.Context, node *model.TNode, statement string, frame *model.ParseFrame, parser *Parser) bool {
-	parser.continueLoop(ctx, node, frame)
-	// continue 关键字处理后不需要继续处理
-	return false
-}

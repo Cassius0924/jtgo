@@ -31,6 +31,8 @@ var (
 	ErrCachedCompiledExpressionsNotFound = errors.New("cached compiled expressions not found")
 	// ErrCachedLoopMetaNotFound 缓存的循环元数据未找到
 	ErrCachedLoopMetaNotFound = errors.New("cached loop meta not found")
+	// ErrCachedSubNodeIteratorsNotFound 缓存的子节点迭代器未找到
+	ErrCachedSubNodeIteratorsNotFound = errors.New("cached sub node iterators not found")
 	// ErrCachedCustomFunctionsNotFound 缓存的自定义函数未找到
 	ErrCachedCustomFunctionsNotFound = errors.New("cached custom functions not found")
 )
